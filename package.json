@@ -1,5 +1,5 @@
 {
-  "name": "storex",
+  "name": "storex-backend-dexie",
   "version": "0.0.1",
   "description": "Storex Dexie backend",
   "main": "lib/index.js",
