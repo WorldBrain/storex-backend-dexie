@@ -15,7 +15,7 @@ export interface IndexedDbImplementation {
     range : new () => IDBKeyRange
 }
 
-export type Stemmer = (text : string) => Promise<Set<string>>
+export type Stemmer = (text : string) => Set<string>
 
 export class DexieStorageBackend extends backend.StorageBackend {
     protected features : StorageBackendFeatureSupport = {
