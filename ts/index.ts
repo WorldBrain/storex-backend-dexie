@@ -1,4 +1,4 @@
-import Dexie from 'dexie'
+import Dexie, {IndexableType} from 'dexie'
 import 'dexie-mongoify'
 
 import { StorageRegistry } from 'storex/ts'
@@ -9,6 +9,7 @@ import { getDexieHistory, getTermsIndex } from './schema'
 import { DexieMongoify } from './types'
 import { IndexDefinition, CollectionField, CollectionDefinition } from 'storex/ts/types';
 import { StorageBackendFeatureSupport } from 'storex/ts/types/backend-features';
+import { UnimplementedError } from 'storex/ts/types/errors';
 
 export interface IndexedDbImplementation {
     factory : IDBFactory
@@ -155,6 +156,41 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async countObjects(collection : string, query) {
         return this.dexie.collection(collection).count(query)
+    }
+
+    async suggestObjects<S, P = any>(collection : string, query, options: backend.SuggestOptions = {}) {
+        // Grab first entry from the filter query; ignore rest for now
+        const [[indexName, value], ...fields] = Object.entries<string>(query)
+
+        if (fields.length > 0) {
+            throw new UnimplementedError(
+                '`suggestObjects` only supports querying a single field.',
+            )
+        }
+
+        const whereClause = this.dexie
+            .table<S, P>(collection)
+            .where(indexName)
+
+        let coll = whereClause.startsWith(value)
+
+        coll = coll.limit(options.limit)
+
+        if (options.reverse) {
+            coll = coll.reverse()
+        }
+
+        const suggestions: any[] = await coll.uniqueKeys()
+
+        const pks = options.includePks
+            ? await coll.primaryKeys()
+            : []
+
+        return suggestions.map((suggestion: S, i) => ({
+            suggestion,
+            collection,
+            pk: pks[i],
+        })) as backend.SuggestResult<S, P>
     }
 }
 
