@@ -9,7 +9,7 @@ import { getDexieHistory, getTermsIndex } from './schema'
 import { DexieMongoify } from './types'
 import { IndexDefinition, CollectionField, CollectionDefinition } from 'storex/ts/types';
 import { StorageBackendFeatureSupport } from 'storex/ts/types/backend-features';
-import { UnimplementedError } from 'storex/ts/types/errors';
+import { UnimplementedError, InvalidOptionsError } from 'storex/ts/types/errors';
 
 export interface IndexedDbImplementation {
     factory : IDBFactory
@@ -119,8 +119,34 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return {object}
     }
 
+    // TODO: Afford full find support for ignoreCase opt; currently just uses the first filter entry
+    private _findIgnoreCase<T>(collection: string, query, findOpts : backend.FindManyOptions = {}) {
+        // Grab first entry from the filter query; ignore rest for now
+        const [[indexName, value], ...fields] = Object.entries<string>(query)
+
+        if (fields.length) {
+            throw new UnimplementedError(
+                'Find methods with `ignoreCase` set only support querying a single field.',
+            )
+        }
+
+        if (findOpts.ignoreCase[0] !== indexName) {
+            throw new InvalidOptionsError(
+                `Specified ignoreCase field '${findOpts.ignoreCase[0]}' is not in filter query.`,
+            )
+        }
+
+        return this.dexie
+            .table<T>(collection)
+            .where(indexName)
+            .equalsIgnoreCase(value)
+    }
+
+
     async findObjects<T>(collection : string, query, findOpts : backend.FindManyOptions = {}) : Promise<Array<T>> {
-        let coll = this.dexie.collection(collection).find(query)
+        let coll = findOpts.ignoreCase && findOpts.ignoreCase.length
+            ? this._findIgnoreCase<T>(collection, query, findOpts)
+            : this.dexie.collection<T>(collection).find(query)
 
         if (findOpts.reverse) {
             coll = coll.reverse()
@@ -134,8 +160,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
             coll = coll.limit(findOpts.limit)
         }
 
-        const docs = await coll.toArray()
-        return docs as T[]
+        return await coll.toArray()
     }
 
     async updateObjects(collection : string, query, updates, options : backend.UpdateManyOptions & {_transaction?} = {}) : Promise<backend.UpdateManyResult> {
@@ -172,7 +197,18 @@ export class DexieStorageBackend extends backend.StorageBackend {
             .table<S, P>(collection)
             .where(indexName)
 
-        let coll = whereClause.startsWith(value)
+        let coll =
+            options.ignoreCase &&
+            options.ignoreCase.length &&
+            options.ignoreCase[0] === indexName
+                ? whereClause.startsWithIgnoreCase(value)
+                : whereClause.startsWith(value)
+
+        if (options.ignoreCase[0] !== indexName) {
+            throw new InvalidOptionsError(
+                `Specified ignoreCase field '${options.ignoreCase[0]}' is not in filter query`,
+            )
+        }
 
         coll = coll.limit(options.limit)
 
