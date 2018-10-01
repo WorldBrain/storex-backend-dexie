@@ -114,10 +114,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
         const collectionDefinition = this.registry.collections[collection]
         await _processFieldsForWrites(collectionDefinition, object, this.stemmer)
         await this.dexie.table(collection).put(object)
-        
+
         return {object}
     }
-    
+
     async findObjects<T>(collection : string, query, findOpts : backend.FindManyOptions = {}) : Promise<Array<T>> {
         let coll = this.dexie.collection(collection).find(query)
 
@@ -136,7 +136,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         const docs = await coll.toArray()
         return docs as T[]
     }
-    
+
     async updateObjects(collection : string, query, updates, options : backend.UpdateManyOptions & {_transaction?} = {}) : Promise<backend.UpdateManyResult> {
         const { modifiedCount } = await this.dexie
             .collection(collection)
@@ -144,7 +144,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         // return modifiedCount
     }
-    
+
     async deleteObjects(collection : string, query, options : backend.DeleteManyOptions = {}) : Promise<backend.DeleteManyResult> {
         const { deletedCount } = await this.dexie
             .collection(collection)
@@ -153,7 +153,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         // return deletedCount
     }
 
-    async count(collection : string, query) {
+    async countObjects(collection : string, query) {
         return this.dexie.collection(collection).count(query)
     }
 }
