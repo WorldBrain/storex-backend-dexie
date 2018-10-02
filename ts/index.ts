@@ -1,4 +1,4 @@
-import Dexie, {IndexableType} from 'dexie'
+import Dexie from 'dexie'
 import 'dexie-mongoify'
 
 import { StorageRegistry } from 'storex/ts'
@@ -6,7 +6,7 @@ import { StorageRegistry } from 'storex/ts'
 import * as backend from 'storex/ts/types/backend'
 import { augmentCreateObject } from 'storex/ts/backend/utils'
 import { getDexieHistory, getTermsIndex } from './schema'
-import { DexieMongoify } from './types'
+import { DexieMongoify, DexieSchema } from './types'
 import { IndexDefinition, CollectionField, CollectionDefinition } from 'storex/ts/types';
 import { StorageBackendFeatureSupport } from 'storex/ts/types/backend-features';
 import { UnimplementedError, InvalidOptionsError } from 'storex/ts/types/errors';
@@ -17,8 +17,23 @@ export interface IndexedDbImplementation {
 }
 
 export type Stemmer = (text : string) => Set<string>
+export type SchemaPatcher = (schema: DexieSchema[]) => DexieSchema[]
+
+interface Props {
+    dbName : string
+    stemmer? : Stemmer
+    idbImplementation? : IndexedDbImplementation
+    /**
+     * An optional function to run the generated Dexie schemas through to
+     * afford changing them independently of the storex registry. Identity
+     * function by default.
+     **/
+    schemaPatcher? : SchemaPatcher
+}
 
 export class DexieStorageBackend extends backend.StorageBackend {
+    static DEF_SCHEMA_PATCHER: SchemaPatcher = f => f
+
     protected features : StorageBackendFeatureSupport = {
         count: true,
         createWithRelationships: true,
@@ -28,17 +43,21 @@ export class DexieStorageBackend extends backend.StorageBackend {
     private dbName : string
     private idbImplementation : IndexedDbImplementation
     private dexie : DexieMongoify
-    private stemmer = null
+    private stemmer : Stemmer
+    private schemaPatcher : SchemaPatcher
 
-    constructor(
-        {dbName, idbImplementation = null, stemmer = null} :
-        {dbName : string, idbImplementation? : IndexedDbImplementation, stemmer? : Stemmer}
-    ) {
+    constructor({
+        dbName,
+        idbImplementation = null,
+        stemmer = null,
+        schemaPatcher = DexieStorageBackend.DEF_SCHEMA_PATCHER,
+    } : Props) {
         super()
 
         this.dbName = dbName
         this.idbImplementation = idbImplementation || {factory: window.indexedDB, range: window['IDBKeyRange']}
         this.stemmer = stemmer
+        this.schemaPatcher = schemaPatcher
     }
 
     configure({registry} : {registry : StorageRegistry}) {
@@ -90,7 +109,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }) as DexieMongoify
 
         const dexieHistory = getDexieHistory(this.registry)
-        dexieHistory.forEach(({ version, schema }) => {
+
+        this.schemaPatcher(dexieHistory).forEach(({ version, schema }) => {
             this.dexie.version(version)
                 .stores(schema)
                 // .upgrade(() => {
