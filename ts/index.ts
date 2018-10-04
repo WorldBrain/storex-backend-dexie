@@ -19,6 +19,8 @@ export interface IndexedDbImplementation {
 export type Stemmer = (text : string) => Set<string>
 export type SchemaPatcher = (schema: DexieSchema[]) => DexieSchema[]
 
+const IdentitySchemaPatcher: SchemaPatcher = f => f
+
 interface Props {
     dbName : string
     stemmer? : Stemmer
@@ -32,8 +34,6 @@ interface Props {
 }
 
 export class DexieStorageBackend extends backend.StorageBackend {
-    static DEF_SCHEMA_PATCHER: SchemaPatcher = f => f
-
     protected features : StorageBackendFeatureSupport = {
         count: true,
         createWithRelationships: true,
@@ -50,7 +50,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         dbName,
         idbImplementation = null,
         stemmer = null,
-        schemaPatcher = DexieStorageBackend.DEF_SCHEMA_PATCHER,
+        schemaPatcher = IdentitySchemaPatcher,
     } : Props) {
         super()
 
