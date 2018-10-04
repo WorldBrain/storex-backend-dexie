@@ -60,6 +60,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
         this.schemaPatcher = schemaPatcher
     }
 
+    get dexieInstance() {
+        return this.dexie
+    }
+
     configure({registry} : {registry : StorageRegistry}) {
         super.configure({registry})
         registry.once('initialized', this._onRegistryInitialized)
@@ -201,52 +205,6 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async countObjects(collection : string, query) {
         return this.dexie.collection(collection).count(query)
-    }
-
-    async suggestObjects<S, P = any>(collection : string, query, options: backend.SuggestOptions = {}) {
-        // Grab first entry from the filter query; ignore rest for now
-        const [[indexName, value], ...fields] = Object.entries<string>(query)
-
-        if (fields.length > 0) {
-            throw new UnimplementedError(
-                '`suggestObjects` only supports querying a single field.',
-            )
-        }
-
-        const whereClause = this.dexie
-            .table<S, P>(collection)
-            .where(indexName)
-
-        let coll =
-            options.ignoreCase &&
-            options.ignoreCase.length &&
-            options.ignoreCase[0] === indexName
-                ? whereClause.startsWithIgnoreCase(value)
-                : whereClause.startsWith(value)
-
-        if (options.ignoreCase[0] !== indexName) {
-            throw new InvalidOptionsError(
-                `Specified ignoreCase field '${options.ignoreCase[0]}' is not in filter query`,
-            )
-        }
-
-        coll = coll.limit(options.limit)
-
-        if (options.reverse) {
-            coll = coll.reverse()
-        }
-
-        const suggestions: any[] = await coll.uniqueKeys()
-
-        const pks = options.includePks
-            ? await coll.primaryKeys()
-            : []
-
-        return suggestions.map((suggestion: S, i) => ({
-            suggestion,
-            collection,
-            pk: pks[i],
-        })) as backend.SuggestResult<S, P>
     }
 }
 
