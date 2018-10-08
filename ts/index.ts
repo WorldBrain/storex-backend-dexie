@@ -6,9 +6,10 @@ import { StorageRegistry } from 'storex/ts'
 import * as backend from 'storex/ts/types/backend'
 import { augmentCreateObject } from 'storex/ts/backend/utils'
 import { getDexieHistory, getTermsIndex } from './schema'
-import { DexieMongoify } from './types'
+import { DexieMongoify, DexieSchema } from './types'
 import { IndexDefinition, CollectionField, CollectionDefinition } from 'storex/ts/types';
 import { StorageBackendFeatureSupport } from 'storex/ts/types/backend-features';
+import { UnimplementedError, InvalidOptionsError } from 'storex/ts/types/errors';
 
 export interface IndexedDbImplementation {
     factory : IDBFactory
@@ -16,6 +17,21 @@ export interface IndexedDbImplementation {
 }
 
 export type Stemmer = (text : string) => Set<string>
+export type SchemaPatcher = (schema: DexieSchema[]) => DexieSchema[]
+
+const IdentitySchemaPatcher: SchemaPatcher = f => f
+
+interface Props {
+    dbName : string
+    stemmer? : Stemmer
+    idbImplementation? : IndexedDbImplementation
+    /**
+     * An optional function to run the generated Dexie schemas through to
+     * afford changing them independently of the storex registry. Identity
+     * function by default.
+     **/
+    schemaPatcher? : SchemaPatcher
+}
 
 export class DexieStorageBackend extends backend.StorageBackend {
     protected features : StorageBackendFeatureSupport = {
@@ -27,17 +43,25 @@ export class DexieStorageBackend extends backend.StorageBackend {
     private dbName : string
     private idbImplementation : IndexedDbImplementation
     private dexie : DexieMongoify
-    private stemmer = null
+    private stemmer : Stemmer
+    private schemaPatcher : SchemaPatcher
 
-    constructor(
-        {dbName, idbImplementation = null, stemmer = null} :
-        {dbName : string, idbImplementation? : IndexedDbImplementation, stemmer? : Stemmer}
-    ) {
+    constructor({
+        dbName,
+        idbImplementation = null,
+        stemmer = null,
+        schemaPatcher = IdentitySchemaPatcher,
+    } : Props) {
         super()
 
         this.dbName = dbName
         this.idbImplementation = idbImplementation || {factory: window.indexedDB, range: window['IDBKeyRange']}
         this.stemmer = stemmer
+        this.schemaPatcher = schemaPatcher
+    }
+
+    get dexieInstance() {
+        return this.dexie
     }
 
     configure({registry} : {registry : StorageRegistry}) {
@@ -89,7 +113,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }) as DexieMongoify
 
         const dexieHistory = getDexieHistory(this.registry)
-        dexieHistory.forEach(({ version, schema }) => {
+
+        this.schemaPatcher(dexieHistory).forEach(({ version, schema }) => {
             this.dexie.version(version)
                 .stores(schema)
                 // .upgrade(() => {
@@ -114,12 +139,38 @@ export class DexieStorageBackend extends backend.StorageBackend {
         const collectionDefinition = this.registry.collections[collection]
         await _processFieldsForWrites(collectionDefinition, object, this.stemmer)
         await this.dexie.table(collection).put(object)
-        
+
         return {object}
     }
-    
+
+    // TODO: Afford full find support for ignoreCase opt; currently just uses the first filter entry
+    private _findIgnoreCase<T>(collection: string, query, findOpts : backend.FindManyOptions = {}) {
+        // Grab first entry from the filter query; ignore rest for now
+        const [[indexName, value], ...fields] = Object.entries<string>(query)
+
+        if (fields.length) {
+            throw new UnimplementedError(
+                'Find methods with `ignoreCase` set only support querying a single field.',
+            )
+        }
+
+        if (findOpts.ignoreCase[0] !== indexName) {
+            throw new InvalidOptionsError(
+                `Specified ignoreCase field '${findOpts.ignoreCase[0]}' is not in filter query.`,
+            )
+        }
+
+        return this.dexie
+            .table<T>(collection)
+            .where(indexName)
+            .equalsIgnoreCase(value)
+    }
+
+
     async findObjects<T>(collection : string, query, findOpts : backend.FindManyOptions = {}) : Promise<Array<T>> {
-        let coll = this.dexie.collection(collection).find(query)
+        let coll = findOpts.ignoreCase && findOpts.ignoreCase.length
+            ? this._findIgnoreCase<T>(collection, query, findOpts)
+            : this.dexie.collection<T>(collection).find(query)
 
         if (findOpts.reverse) {
             coll = coll.reverse()
@@ -133,10 +184,9 @@ export class DexieStorageBackend extends backend.StorageBackend {
             coll = coll.limit(findOpts.limit)
         }
 
-        const docs = await coll.toArray()
-        return docs as T[]
+        return await coll.toArray()
     }
-    
+
     async updateObjects(collection : string, query, updates, options : backend.UpdateManyOptions & {_transaction?} = {}) : Promise<backend.UpdateManyResult> {
         const { modifiedCount } = await this.dexie
             .collection(collection)
@@ -144,7 +194,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         // return modifiedCount
     }
-    
+
     async deleteObjects(collection : string, query, options : backend.DeleteManyOptions = {}) : Promise<backend.DeleteManyResult> {
         const { deletedCount } = await this.dexie
             .collection(collection)
@@ -153,7 +203,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         // return deletedCount
     }
 
-    async count(collection : string, query) {
+    async countObjects(collection : string, query) {
         return this.dexie.collection(collection).count(query)
     }
 }
