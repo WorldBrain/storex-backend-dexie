@@ -1,8 +1,8 @@
 /* eslint-env jest */
 import * as expect from 'expect'
-import StorageRegisty from 'storex/ts/registry'
+import StorageRegisty from 'storex/lib/registry'
 import { getDexieHistory } from './schema'
-import { FieldTypeRegistry } from 'storex/ts/fields';
+import { FieldTypeRegistry } from 'storex/lib/fields';
 
 describe('Dexie schema generation', () => {
     it('it should work', () => {

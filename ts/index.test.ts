@@ -1,4 +1,4 @@
-import { testStorageBackend, testStorageBackendFullTextSearch } from "storex/ts/index.tests"
+import { testStorageBackend, testStorageBackendFullTextSearch } from "storex/lib/index.tests"
 import { DexieStorageBackend } from "."
 import inMemory from './in-memory'
 import extractTerms from "memex-stemmer";

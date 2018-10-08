@@ -1,6 +1,6 @@
-import StorageRegistry, { RegistryCollections } from 'storex/ts/registry'
+import StorageRegistry, { RegistryCollections } from 'storex/lib/registry'
 import { DexieSchema } from './types'
-import { CollectionDefinition, isRelationshipReference, isChildOfRelationship, isConnectsRelationship, RelationshipReference } from 'storex/ts/types'
+import { CollectionDefinition, isRelationshipReference, isChildOfRelationship, isConnectsRelationship, RelationshipReference } from 'storex/lib/types'
 
 export const getTermsIndex = (fieldName: string) => `_${fieldName}_terms`
 

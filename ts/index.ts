@@ -1,15 +1,15 @@
 import Dexie from 'dexie'
 import 'dexie-mongoify'
 
-import { StorageRegistry } from 'storex/ts'
+import { StorageRegistry } from 'storex'
 // import { CollectionDefinition } from 'storex/types'
-import * as backend from 'storex/ts/types/backend'
-import { augmentCreateObject } from 'storex/ts/backend/utils'
+import * as backend from 'storex/lib/types/backend'
+import { augmentCreateObject } from 'storex/lib/backend/utils'
 import { getDexieHistory, getTermsIndex } from './schema'
 import { DexieMongoify, DexieSchema } from './types'
-import { IndexDefinition, CollectionField, CollectionDefinition } from 'storex/ts/types';
-import { StorageBackendFeatureSupport } from 'storex/ts/types/backend-features';
-import { UnimplementedError, InvalidOptionsError } from 'storex/ts/types/errors';
+import { IndexDefinition, CollectionField, CollectionDefinition } from 'storex/lib/types';
+import { StorageBackendFeatureSupport } from 'storex/lib/types/backend-features';
+import { UnimplementedError, InvalidOptionsError } from 'storex/lib/types/errors';
 
 export interface IndexedDbImplementation {
     factory : IDBFactory
