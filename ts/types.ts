@@ -22,3 +22,22 @@ export interface DexieSchema {
         [collName: string]: string
     }
 }
+
+export type UpdateOpApplier<V=any> = (object, key: string, value: V) => void
+
+export interface UpdateOps { 
+    $inc: UpdateOpApplier<number>
+    $mul: UpdateOpApplier<number>
+    $rename: UpdateOpApplier
+    $set: UpdateOpApplier
+    $unset: UpdateOpApplier
+    $min: UpdateOpApplier
+    $max: UpdateOpApplier
+    $addToSet: UpdateOpApplier
+    $pop: UpdateOpApplier
+    $push: UpdateOpApplier
+    $pull: UpdateOpApplier
+    $pullAll: UpdateOpApplier
+    $slice: UpdateOpApplier
+    $sort: UpdateOpApplier
+}
