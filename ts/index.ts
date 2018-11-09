@@ -184,7 +184,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
             coll = coll.limit(findOpts.limit)
         }
 
-        return await coll.toArray()
+        return coll.toArray()
     }
 
     async updateObjects(collection : string, query, updates, options : backend.UpdateManyOptions & {_transaction?} = {}) : Promise<backend.UpdateManyResult> {
@@ -253,7 +253,7 @@ export function _processFieldUpdates(updates, object) {
  * Handles mutation of a document to be inserted/updated to storage,
  * depending on needed pre-processing for a given indexed field.
  */
-export async function _processIndexedField(
+export function _processIndexedField(
     fieldName: string,
     indexDef: IndexDefinition,
     fieldDef: CollectionField,
@@ -265,7 +265,7 @@ export async function _processIndexedField(
             const fullTextField =
                 indexDef.fullTextIndexName ||
                 getTermsIndex(fieldName)
-            object[fullTextField] = [...await stemmer(object[fieldName])]
+            object[fullTextField] = [...stemmer(object[fieldName])]
             break
         default:
     }
@@ -284,7 +284,7 @@ export async function _processFieldsForWrites(def: CollectionDefinition, object,
         }
 
         if (fieldDef._index != null) {
-            await _processIndexedField(
+            _processIndexedField(
                 fieldName,
                 def.indices[fieldDef._index],
                 fieldDef,
