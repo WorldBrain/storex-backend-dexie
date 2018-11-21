@@ -6,7 +6,7 @@ import { StorageRegistry } from 'storex'
 import * as backend from 'storex/lib/types/backend'
 import { augmentCreateObject } from 'storex/lib/backend/utils'
 import { getDexieHistory, getTermsIndex } from './schema'
-import { DexieMongoify, DexieSchema } from './types'
+import { DexieMongoify, DexieSchema, UpdateOps } from './types'
 import { IndexDefinition, CollectionField, CollectionDefinition } from 'storex/lib/types';
 import { StorageBackendFeatureSupport } from 'storex/lib/types/backend-features';
 import { UnimplementedError, InvalidOptionsError } from 'storex/lib/types/errors';
@@ -184,15 +184,19 @@ export class DexieStorageBackend extends backend.StorageBackend {
             coll = coll.limit(findOpts.limit)
         }
 
-        return await coll.toArray()
+        return coll.toArray()
     }
 
     async updateObjects(collection : string, query, updates, options : backend.UpdateManyOptions & {_transaction?} = {}) : Promise<backend.UpdateManyResult> {
-        const { modifiedCount } = await this.dexie
-            .collection(collection)
-            .update(query, updates)
+        const collectionDefinition = this.registry.collections[collection]
 
-        // return modifiedCount
+        const objects = await this.findObjects(collection, query, options)
+
+        for (const object of objects) {
+            _processFieldUpdates(updates, object)
+            await _processFieldsForWrites(collectionDefinition, object, this.stemmer)
+            await this.dexie.table(collection).put(object)
+        }
     }
 
     async deleteObjects(collection : string, query, options : backend.DeleteManyOptions = {}) : Promise<backend.DeleteManyResult> {
@@ -208,11 +212,48 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 }
 
+
+/**
+ * Handles mutation of a document, updating each field in the way specified
+ * in the `updates` object.
+ * See for more info: https://github.com/YurySolovyov/dexie-mongoify/blob/master/docs/update-api.md
+ *
+ * TODO: Proper runtime error handling for badly formed update objs.
+ */
+export function _processFieldUpdates(updates, object) {
+    // TODO: Find a home for this
+    // TODO: Support all update ops
+    const updateOpAppliers: UpdateOps = {
+        $inc: (obj, key, value) => (obj[key] += value),
+        $set: (obj, key, value) => (obj[key] = value),
+        $mul: (obj, key, value) => (obj[key] *= value),
+        $unset: (obj, key) => (obj[key] = undefined),
+        $rename: () => undefined,
+        $min: () => undefined,
+        $max: () => undefined,
+        $addToSet: () => undefined,
+        $pop: () => undefined,
+        $push: () => undefined,
+        $pull: () => undefined,
+        $pullAll: () => undefined,
+        $slice: () => undefined,
+        $sort: () => undefined,
+    }
+
+    for (const [updateKey, updateVal] of Object.entries(updates)) {
+        // If supported update op, run assoc. update op applier
+        if (updateOpAppliers[updateKey] != null) {
+            Object.entries(updateVal).forEach(([key, val]) =>
+                updateOpAppliers[updateKey](object, key, val))
+        }
+    }
+}
+
 /**
  * Handles mutation of a document to be inserted/updated to storage,
  * depending on needed pre-processing for a given indexed field.
  */
-export async function _processIndexedField(
+export function _processIndexedField(
     fieldName: string,
     indexDef: IndexDefinition,
     fieldDef: CollectionField,
@@ -224,7 +265,7 @@ export async function _processIndexedField(
             const fullTextField =
                 indexDef.fullTextIndexName ||
                 getTermsIndex(fieldName)
-            object[fullTextField] = [...await stemmer(object[fieldName])]
+            object[fullTextField] = [...stemmer(object[fieldName])]
             break
         default:
     }
@@ -243,7 +284,7 @@ export async function _processFieldsForWrites(def: CollectionDefinition, object,
         }
 
         if (fieldDef._index != null) {
-            await _processIndexedField(
+            _processIndexedField(
                 fieldName,
                 def.indices[fieldDef._index],
                 fieldDef,
