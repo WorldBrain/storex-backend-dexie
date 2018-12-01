@@ -245,6 +245,8 @@ export function _processFieldUpdates(updates, object) {
         if (updateOpAppliers[updateKey] != null) {
             Object.entries(updateVal).forEach(([key, val]) =>
                 updateOpAppliers[updateKey](object, key, val))
+        } else {
+            object[updateKey] = updateVal
         }
     }
 }
