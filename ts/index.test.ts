@@ -1,7 +1,7 @@
-import { testStorageBackend, testStorageBackendFullTextSearch } from "storex/lib/index.tests"
+import { testStorageBackend, testStorageBackendFullTextSearch } from "@worldbrain/storex/lib/index.tests"
+import extractTerms from "@worldbrain/memex-stemmer";
 import { DexieStorageBackend } from "."
 import inMemory from './in-memory'
-import extractTerms from "memex-stemmer";
 
 describe('Dexie StorageBackend integration tests', () => {
     testStorageBackend(async () => {
