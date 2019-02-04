@@ -1,12 +1,12 @@
 /* eslint-env jest */
-import * as expect from 'expect'
+const expect = require('expect')
 import StorageRegisty from '@worldbrain/storex/lib/registry'
 import { getDexieHistory } from './schema'
 import { FieldTypeRegistry } from '@worldbrain/storex/lib/fields';
 
 describe('Dexie schema generation', () => {
     it('it should work', () => {
-        const storageRegisty = new StorageRegisty({fieldTypes: new FieldTypeRegistry()})
+        const storageRegisty = new StorageRegisty({ fieldTypes: new FieldTypeRegistry() })
         storageRegisty.registerCollection('spam', {
             version: new Date(2018, 5, 20),
             fields: {

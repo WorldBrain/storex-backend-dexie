@@ -7,17 +7,15 @@ export const getTermsIndex = (fieldName: string) => `_${fieldName}_terms`
 export function getDexieHistory(storageRegistry: StorageRegistry) {
     const collections = {}
     const versions: DexieSchema[] = []
-    let version = 0
+    let dexieVersion = 0
 
-    Object.entries(storageRegistry.collectionsByVersion)
-        .sort((left, right) => (left[0] < right[0] ? -1 : 1))
-        .forEach(([, defs]) => {
-            defs.forEach(def => (collections[def.name] = def))
-            versions.push({
-                ...getDexieSchema(collections),
-                version: ++version,
-            })
+    for (const { collections: versionCollections } of storageRegistry.getSchemaHistory()) {
+        Object.assign(collections, versionCollections)
+        versions.push({
+            ...getDexieSchema(collections),
+            version: ++dexieVersion,
         })
+    }
 
     return versions
 }
@@ -43,7 +41,7 @@ function convertIndexToDexieExps({ name: collection, fields, indices, relationsh
     return indices
         .sort(({ pk }) => (pk ? -1 : 1)) // PK indexes always come first in Dexie
         .map((indexDef) => {
-            const fieldNameFromRelationshipReference = (reference : RelationshipReference) : string | string[] => {
+            const fieldNameFromRelationshipReference = (reference: RelationshipReference): string | string[] => {
                 const relationship = relationshipsByAlias[reference.relationship]
                 if (!relationship) {
                     throw new Error(

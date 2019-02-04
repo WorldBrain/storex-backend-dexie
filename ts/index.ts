@@ -12,50 +12,50 @@ import { StorageBackendFeatureSupport } from '@worldbrain/storex/lib/types/backe
 import { UnimplementedError, InvalidOptionsError } from '@worldbrain/storex/lib/types/errors';
 
 export interface IndexedDbImplementation {
-    factory : IDBFactory
-    range : new () => IDBKeyRange
+    factory: IDBFactory
+    range: new () => IDBKeyRange
 }
 
-export type Stemmer = (text : string) => Set<string>
+export type Stemmer = (text: string) => Set<string>
 export type SchemaPatcher = (schema: DexieSchema[]) => DexieSchema[]
 
 const IdentitySchemaPatcher: SchemaPatcher = f => f
 
 interface Props {
-    dbName : string
-    stemmer? : Stemmer
-    idbImplementation? : IndexedDbImplementation
+    dbName: string
+    stemmer?: Stemmer
+    idbImplementation?: IndexedDbImplementation
     /**
      * An optional function to run the generated Dexie schemas through to
      * afford changing them independently of the storex registry. Identity
      * function by default.
      **/
-    schemaPatcher? : SchemaPatcher
+    schemaPatcher?: SchemaPatcher
 }
 
 export class DexieStorageBackend extends backend.StorageBackend {
-    protected features : StorageBackendFeatureSupport = {
+    protected features: StorageBackendFeatureSupport = {
         count: true,
         createWithRelationships: true,
         fullTextSearch: true,
     }
 
-    private dbName : string
-    private idbImplementation : IndexedDbImplementation
-    private dexie : DexieMongoify
-    private stemmer : Stemmer
-    private schemaPatcher : SchemaPatcher
+    private dbName: string
+    private idbImplementation: IndexedDbImplementation
+    private dexie: DexieMongoify
+    private stemmer: Stemmer
+    private schemaPatcher: SchemaPatcher
 
     constructor({
         dbName,
         idbImplementation = null,
         stemmer = null,
         schemaPatcher = IdentitySchemaPatcher,
-    } : Props) {
+    }: Props) {
         super()
 
         this.dbName = dbName
-        this.idbImplementation = idbImplementation || {factory: window.indexedDB, range: window['IDBKeyRange']}
+        this.idbImplementation = idbImplementation || { factory: window.indexedDB, range: window['IDBKeyRange'] }
         this.stemmer = stemmer
         this.schemaPatcher = schemaPatcher
     }
@@ -64,15 +64,15 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return this.dexie
     }
 
-    configure({registry} : {registry : StorageRegistry}) {
-        super.configure({registry})
+    configure({ registry }: { registry: StorageRegistry }) {
+        super.configure({ registry })
         registry.once('initialized', this._onRegistryInitialized)
 
         const origCreateObject = this.createObject.bind(this)
         this.createObject = augmentCreateObject(origCreateObject, { registry })
     }
 
-    supports(feature : string) {
+    supports(feature: string) {
         if (feature !== 'fullTextSearch') {
             return super.supports(feature)
         }
@@ -117,34 +117,34 @@ export class DexieStorageBackend extends backend.StorageBackend {
         this.schemaPatcher(dexieHistory).forEach(({ version, schema }) => {
             this.dexie.version(version)
                 .stores(schema)
-                // .upgrade(() => {
-                //     migrations.forEach(migration => {
-                //         // TODO: Call migration with some object that allows for data manipulation
-                //     })
-                // })
+            // .upgrade(() => {
+            //     migrations.forEach(migration => {
+            //         // TODO: Call migration with some object that allows for data manipulation
+            //     })
+            // })
         })
     }
 
-    async migrate({database} : {database? : string} = {}) {
+    async migrate({ database }: { database?: string } = {}) {
         if (database) {
             throw new Error('This backend doesn\'t support multiple databases directly')
         }
     }
 
-    async cleanup() : Promise<any> {
+    async cleanup(): Promise<any> {
 
     }
 
-    async createObject(collection : string, object, options : backend.CreateSingleOptions & {_transaction?} = {}) : Promise<backend.CreateSingleResult> {
+    async createObject(collection: string, object, options: backend.CreateSingleOptions & { _transaction?} = {}): Promise<backend.CreateSingleResult> {
         const collectionDefinition = this.registry.collections[collection]
         await _processFieldsForWrites(collectionDefinition, object, this.stemmer)
         await this.dexie.table(collection).put(object)
 
-        return {object}
+        return { object }
     }
 
     // TODO: Afford full find support for ignoreCase opt; currently just uses the first filter entry
-    private _findIgnoreCase<T>(collection: string, query, findOpts : backend.FindManyOptions = {}) {
+    private _findIgnoreCase<T>(collection: string, query, findOpts: backend.FindManyOptions = {}) {
         // Grab first entry from the filter query; ignore rest for now
         const [[indexName, value], ...fields] = Object.entries<string>(query)
 
@@ -167,7 +167,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
 
-    async findObjects<T>(collection : string, query, findOpts : backend.FindManyOptions = {}) : Promise<Array<T>> {
+    async findObjects<T>(collection: string, query, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
         let coll = findOpts.ignoreCase && findOpts.ignoreCase.length
             ? this._findIgnoreCase<T>(collection, query, findOpts)
             : this.dexie.collection<T>(collection).find(query)
@@ -187,7 +187,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return coll.toArray()
     }
 
-    async updateObjects(collection : string, query, updates, options : backend.UpdateManyOptions & {_transaction?} = {}) : Promise<backend.UpdateManyResult> {
+    async updateObjects(collection: string, query, updates, options: backend.UpdateManyOptions & { _transaction?} = {}): Promise<backend.UpdateManyResult> {
         const collectionDefinition = this.registry.collections[collection]
 
         const objects = await this.findObjects(collection, query, options)
@@ -199,7 +199,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async deleteObjects(collection : string, query, options : backend.DeleteManyOptions = {}) : Promise<backend.DeleteManyResult> {
+    async deleteObjects(collection: string, query, options: backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
         const { deletedCount } = await this.dexie
             .collection(collection)
             .remove(query)
@@ -207,7 +207,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         // return deletedCount
     }
 
-    async countObjects(collection : string, query) {
+    async countObjects(collection: string, query) {
         return this.dexie.collection(collection).count(query)
     }
 }
@@ -260,7 +260,7 @@ export function _processIndexedField(
     indexDef: IndexDefinition,
     fieldDef: CollectionField,
     object,
-    stemmer : Stemmer,
+    stemmer: Stemmer,
 ) {
     switch (fieldDef.type) {
         case 'text':
@@ -277,7 +277,7 @@ export function _processIndexedField(
  * Handles mutation of a document to be written to storage,
  * depending on needed pre-processing of fields.
  */
-export async function _processFieldsForWrites(def: CollectionDefinition, object, stemmer : Stemmer) {
+export async function _processFieldsForWrites(def: CollectionDefinition, object, stemmer: Stemmer) {
     for (const [fieldName, fieldDef] of Object.entries(def.fields)) {
         if (fieldDef.fieldObject) {
             object[fieldName] = await fieldDef.fieldObject.prepareForStorage(

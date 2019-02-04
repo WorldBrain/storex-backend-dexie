@@ -6,13 +6,18 @@
         "moduleResolution": "node",
         "noImplicitAny": false,
         "removeComments": true,
-        "lib": ["es2017", "dom"],
+        "lib": [
+            "es2017",
+            "dom"
+        ],
         "noLib": false,
         "preserveConstEnums": true,
         "declaration": true,
         "sourceMap": true,
         "suppressImplicitAnyIndexErrors": true,
-        "typeRoots": ["./node_modules/@types"],
+        "typeRoots": [
+            "./node_modules/@types"
+        ],
         "outDir": "lib",
         "downlevelIteration": true
     },
