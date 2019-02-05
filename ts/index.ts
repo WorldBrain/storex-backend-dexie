@@ -40,11 +40,12 @@ export class DexieStorageBackend extends backend.StorageBackend {
         fullTextSearch: true,
     }
 
-    private dbName: string
-    private idbImplementation: IndexedDbImplementation
-    private dexie: DexieMongoify
-    private stemmer: Stemmer
-    private schemaPatcher: SchemaPatcher
+    private dbName : string
+    private idbImplementation : IndexedDbImplementation
+    private dexie : DexieMongoify
+    private stemmer : Stemmer
+    private schemaPatcher : SchemaPatcher
+    private initialized = false
 
     constructor({
         dbName,
@@ -83,6 +84,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
     _onRegistryInitialized = () => {
         this._validateRegistry()
         this._initDexie()
+        this.initialized = true
     }
 
     _validateRegistry() {
@@ -209,6 +211,13 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async countObjects(collection: string, query) {
         return this.dexie.collection(collection).count(query)
+    }
+
+    async operation(name : string, ...args) {
+        if (!this.initialized) {
+            throw new Error('Tried to use Dexie backend without calling StorageManager.finishInitialization() first')
+        }
+        return await super.operation(name, ...args)
     }
 }
 
