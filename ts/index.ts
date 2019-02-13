@@ -34,10 +34,11 @@ interface Props {
 }
 
 export class DexieStorageBackend extends backend.StorageBackend {
-    protected features: StorageBackendFeatureSupport = {
+    features: StorageBackendFeatureSupport = {
         count: true,
         createWithRelationships: true,
         fullTextSearch: true,
+        executeBatch: true,
     }
 
     private dbName : string
@@ -69,8 +70,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
         super.configure({ registry })
         registry.once('initialized', this._onRegistryInitialized)
 
-        const origCreateObject = this.createObject.bind(this)
-        this.createObject = augmentCreateObject(origCreateObject, { registry })
+        // const origCreateObject = this.createObject.bind(this)
+        // this.createObject = augmentCreateObject(origCreateObject, { registry })
     }
 
     supports(feature: string) {
@@ -211,6 +212,27 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async countObjects(collection: string, query) {
         return this.dexie.collection(collection).count(query)
+    }
+
+    async executeBatch(operations : {operation : 'createObject', collection? : string, args : any, placeholder? : string, replace? : {path : string, placeholder : string}[]}[]) {
+        const collections = Array.from(new Set(operations.map(operation => operation.collection)))
+        const tables = collections.map(collection => this.dexie.table(collection))
+        const info = {}
+        await this.dexie.transaction('rw', tables, async () => {
+            const placeholders = {}
+            for (const operation of operations) {
+                for (const {path, placeholder} of operation.replace || []) {
+                    operation.args[path as string] = placeholders[placeholder].id
+                }
+
+                if (operation.operation === 'createObject') {
+                    const { object } = await this.createObject(operation.collection, operation.args)
+                    info[operation.placeholder] = {object}
+                    placeholders[operation.placeholder] = object
+                }
+            }
+        })
+        return { info }
     }
 
     async operation(name : string, ...args) {
