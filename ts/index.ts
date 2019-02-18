@@ -193,11 +193,16 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
 
     async findObjects<T>(collection: string, query, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
+        const order = findOpts.order && findOpts.order.length ? findOpts.order[0] : null
+        if (order && findOpts.order.length > 1) {
+            throw new Error('Sorting on multiple fields is not supported')
+        }
+
         let coll = findOpts.ignoreCase && findOpts.ignoreCase.length
             ? this._findIgnoreCase<T>(collection, query, findOpts)
             : this.dexie.collection<T>(collection).find(query)
 
-        if (findOpts.reverse) {
+        if (findOpts.reverse || (order && order[1] == 'desc')) {
             coll = coll.reverse()
         }
 
@@ -209,7 +214,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
             coll = coll.limit(findOpts.limit)
         }
 
-        return coll.toArray()
+        if (findOpts.order) {
+            return coll.sortBy(order[0])
+        } else {
+            return coll.toArray()
+        }
     }
 
     async updateObjects(collection: string, query, updates, options: backend.UpdateManyOptions & { _transaction?} = {}): Promise<backend.UpdateManyResult> {
