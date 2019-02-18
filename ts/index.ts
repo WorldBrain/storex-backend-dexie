@@ -2,6 +2,7 @@ import Dexie from 'dexie'
 import 'dexie-mongoify'
 
 import { StorageRegistry } from '@worldbrain/storex'
+import { CreateObjectDissection, dissectCreateObjectOperation, convertCreateObjectDissectionToBatch, setIn } from '@worldbrain/storex/lib/utils'
 // import { CollectionDefinition } from 'storex/types'
 import * as backend from '@worldbrain/storex/lib/types/backend'
 import { augmentCreateObject } from '@worldbrain/storex/lib/backend/utils'
@@ -138,7 +139,28 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     }
 
-    async createObject(collection: string, object, options: backend.CreateSingleOptions & { _transaction?} = {}): Promise<backend.CreateSingleResult> {
+    async createObject(collection: string, object, options: backend.CreateSingleOptions = {}): Promise<backend.CreateSingleResult> {
+        return this._complexCreateObject(collection, object, {...options, needsRawCreates: false})
+    }
+
+    async _complexCreateObject(collection: string, object, options: backend.CreateSingleOptions & {needsRawCreates : boolean}) {
+        const dissection = dissectCreateObjectOperation({operation: 'createObject', collection, args: object}, this.registry)
+        const batchToExecute = convertCreateObjectDissectionToBatch(dissection)
+        const batchResult = await this._rawExecuteBatch(batchToExecute, {needsRawCreates: true})
+        this._reconstructCreatedObject(object, collection, dissection, batchResult.info)
+
+        return { object }
+    }
+
+    async _reconstructCreatedObject(object, collection : string, operationDissection : CreateObjectDissection, batchResultInfo) {
+        for (const step of operationDissection.objects) {
+            const collectionDefiniton = this.registry.collections[collection]
+            const pkIndex = collectionDefiniton.pkIndex
+            setIn(object, [...step.path, pkIndex], batchResultInfo[step.placeholder].object[pkIndex as string])
+        }
+    }
+
+    async _rawCreateObject(collection: string, object, options: backend.CreateSingleOptions = {}) {
         const collectionDefinition = this.registry.collections[collection]
         await _processFieldsForWrites(collectionDefinition, object, this.stemmer)
         await this.dexie.table(collection).put(object)
@@ -215,23 +237,34 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     async executeBatch(operations : {operation : 'createObject', collection? : string, args : any, placeholder? : string, replace? : {path : string, placeholder : string}[]}[]) {
-        const collections = Array.from(new Set(operations.map(operation => operation.collection)))
+        const collections = Array.from(new Set(_flattenBatch(operations, this.registry).map(operation => operation.collection)))
         const tables = collections.map(collection => this.dexie.table(collection))
-        const info = {}
+        let info = null
         await this.dexie.transaction('rw', tables, async () => {
-            const placeholders = {}
-            for (const operation of operations) {
-                for (const {path, placeholder} of operation.replace || []) {
-                    operation.args[path as string] = placeholders[placeholder].id
-                }
-
-                if (operation.operation === 'createObject') {
-                    const { object } = await this.createObject(operation.collection, operation.args)
-                    info[operation.placeholder] = {object}
-                    placeholders[operation.placeholder] = object
-                }
-            }
+            info = (await this._rawExecuteBatch(operations, {needsRawCreates: false})).info
         })
+        return { info }
+    }
+
+    async _rawExecuteBatch(
+        operations : {operation : 'createObject', collection? : string, args : any, placeholder? : string, replace? : {path : string, placeholder : string}[]}[],
+        options : {needsRawCreates : boolean}
+    ) {
+        const info = {}
+        const placeholders = {}
+        for (const operation of operations) {
+            for (const {path, placeholder} of operation.replace || []) {
+                operation.args[path as string] = placeholders[placeholder].id
+            }
+
+            if (operation.operation === 'createObject') {
+                const { object } = options.needsRawCreates
+                    ? await this._rawCreateObject(operation.collection, operation.args)
+                    : await this._complexCreateObject(operation.collection, operation.args, {needsRawCreates: true})
+                info[operation.placeholder] = {object}
+                placeholders[operation.placeholder] = object
+            }
+        }
         return { info }
     }
 
@@ -340,4 +373,34 @@ export function _processFieldsForReads(def: CollectionDefinition, object) {
             )
         }
     })
+}
+
+export function _flattenBatch(originalBatch, registry : StorageRegistry) {
+    const generatedBatch = []
+    let placeholdersGenerated = 0
+    for (const step of originalBatch) {
+        if (step.operation !== 'createObject') {
+            generatedBatch.push(step)
+            continue
+        }
+
+        const dissection = dissectCreateObjectOperation(step, registry, {
+            generatePlaceholder: (() => {
+                let isFirst = true
+                return () => {
+                    if (isFirst) {
+                        isFirst = false
+                        return step.placeholder
+                    } else {
+                        return `auto-gen:${++placeholdersGenerated}`
+                    }
+                }
+            })()
+        })
+        const creationBatch = convertCreateObjectDissectionToBatch(dissection)
+        for (const object of creationBatch) {
+            generatedBatch.push(object)
+        }
+    }
+    return generatedBatch
 }
