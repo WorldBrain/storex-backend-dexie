@@ -245,33 +245,35 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return this.dexie.collection(collection).count(query)
     }
 
-    async executeBatch(operations : {operation : 'createObject', collection? : string, args : any, placeholder? : string, replace? : {path : string, placeholder : string}[]}[]) {
-        const collections = Array.from(new Set(_flattenBatch(operations, this.registry).map(operation => operation.collection)))
+    async executeBatch(batch : backend.OperationBatch) {
+        const collections = Array.from(new Set(_flattenBatch(batch, this.registry).map(operation => operation.collection)))
         const tables = collections.map(collection => this.dexie.table(collection))
         let info = null
         await this.dexie.transaction('rw', tables, async () => {
-            info = (await this._rawExecuteBatch(operations, {needsRawCreates: false})).info
+            info = (await this._rawExecuteBatch(batch, {needsRawCreates: false})).info
         })
         return { info }
     }
 
     async _rawExecuteBatch(
-        operations : {operation : 'createObject', collection? : string, args : any, placeholder? : string, replace? : {path : string, placeholder : string}[]}[],
+        batch : backend.OperationBatch,
         options : {needsRawCreates : boolean}
     ) {
         const info = {}
         const placeholders = {}
-        for (const operation of operations) {
-            for (const {path, placeholder} of operation.replace || []) {
-                operation.args[path as string] = placeholders[placeholder].id
-            }
-
+        for (const operation of batch) {
             if (operation.operation === 'createObject') {
+                for (const {path, placeholder} of operation.replace || []) {
+                    operation.args[path as string] = placeholders[placeholder].id
+                }
+
                 const { object } = options.needsRawCreates
                     ? await this._rawCreateObject(operation.collection, operation.args)
                     : await this._complexCreateObject(operation.collection, operation.args, {needsRawCreates: true})
                 info[operation.placeholder] = {object}
                 placeholders[operation.placeholder] = object
+            } else if (operation.operation === 'updateObjects') {
+                await this.updateObjects(operation.collection, operation.where, operation.updates)
             }
         }
         return { info }
