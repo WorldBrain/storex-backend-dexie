@@ -116,6 +116,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
             IDBKeyRange: this.idbImplementation.range
         }) as DexieMongoify
 
+        // DexieMongofiy binds the .collection to the last DB created, creating confusing situations when using multiple DBs at the same time
+        Dexie.prototype['collection'] = function collection(collectionName) {
+            return this.table(collectionName);
+        }
+
         const dexieHistory = getDexieHistory(this.registry)
 
         this.schemaPatcher(dexieHistory).forEach(({ version, schema }) => {
