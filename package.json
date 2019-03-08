@@ -1,6 +1,6 @@
 {
   "name": "@worldbrain/storex-backend-dexie",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Storex Dexie backend",
   "main": "lib/index.js",
   "typings": "lib/index",
