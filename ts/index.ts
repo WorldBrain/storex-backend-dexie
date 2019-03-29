@@ -40,6 +40,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         createWithRelationships: true,
         fullTextSearch: true,
         executeBatch: true,
+        transaction: true,
     }
 
     private dbName : string
@@ -264,6 +265,21 @@ export class DexieStorageBackend extends backend.StorageBackend {
             info = (await this._rawExecuteBatch(batch, {needsRawCreates: false})).info
         })
         return { info }
+    }
+
+    async transaction(options : { collections: string[] }, body : Function) {
+        const executeBody = async () => {
+            body({ transactionOperation: (name : string, ...args) => {
+                return this.operation(name, ...args)
+            } })
+        }
+
+        if (typeof navigator !== 'undefined') {
+            const tables = options.collections.map(collection => this.dexie.table(collection))
+            await this.dexie.transaction('rw', tables, executeBody)
+        } else {
+            await executeBody()
+        }
     }
 
     async _rawExecuteBatch(
