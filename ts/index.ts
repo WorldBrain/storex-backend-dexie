@@ -259,9 +259,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async executeBatch(batch : backend.OperationBatch) {
         const collections = Array.from(new Set(_flattenBatch(batch, this.registry).map(operation => operation.collection)))
-        const tables = collections.map(collection => this.dexie.table(collection))
         let info = null
-        await this.dexie.transaction('rw', tables, async () => {
+        await this.transaction({ collections }, async () => {
             info = (await this._rawExecuteBatch(batch, {needsRawCreates: false})).info
         })
         return { info }
@@ -269,7 +268,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async transaction(options : { collections: string[] }, body : Function) {
         const executeBody = async () => {
-            body({ transactionOperation: (name : string, ...args) => {
+            await body({ transactionOperation: (name : string, ...args) => {
                 return this.operation(name, ...args)
             } })
         }
@@ -310,6 +309,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         if (!this.initialized) {
             throw new Error('Tried to use Dexie backend without calling StorageManager.finishInitialization() first')
         }
+        // console.log('operation', name)
         return await super.operation(name, ...args)
     }
 }
