@@ -233,7 +233,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return results
     }
 
-    async updateObjects(collection: string, query, updates, options: backend.UpdateManyOptions & { _transaction?} = {}): Promise<backend.UpdateManyResult> {
+    async updateObjects(collection: string, query, updates, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
         const collectionDefinition = this.registry.collections[collection]
 
         const objects = await this.findObjects(collection, query, options)
@@ -258,6 +258,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     async executeBatch(batch : backend.OperationBatch) {
+        if (!batch.length) {
+            return { info: {} }
+        }
+
         const collections = Array.from(new Set(_flattenBatch(batch, this.registry).map(operation => operation.collection)))
         let info = null
         await this.transaction({ collections }, async () => {
