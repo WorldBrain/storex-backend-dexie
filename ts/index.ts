@@ -272,16 +272,16 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async transaction(options : { collections: string[] }, body : Function) {
         const executeBody = async () => {
-            await body({ transactionOperation: (name : string, ...args) => {
+            return body({ transactionOperation: (name : string, ...args) => {
                 return this.operation(name, ...args)
             } })
         }
 
         if (typeof navigator !== 'undefined') {
             const tables = options.collections.map(collection => this.dexie.table(collection))
-            await this.dexie.transaction('rw', tables, executeBody)
+            return this.dexie.transaction('rw', tables, executeBody)
         } else {
-            await executeBody()
+            return executeBody()
         }
     }
 
