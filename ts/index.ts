@@ -54,7 +54,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
     constructor({
         dbName,
         idbImplementation = null,
-        stemmerSelector = null,
+        stemmerSelector = () => null,
         schemaPatcher = IdentitySchemaPatcher,
     }: Props) {
         super()
