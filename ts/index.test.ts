@@ -13,7 +13,7 @@ describe('Dexie StorageBackend integration tests', () => {
 
 describe('Dexie StorageBackend full-text search with Memex stemmer tests', () => {
     testStorageBackendFullTextSearch(async () => {
-        return new DexieStorageBackend({dbName: 'unittest', idbImplementation: inMemory(), stemmer: extractTerms})
+        return new DexieStorageBackend({dbName: 'unittest', idbImplementation: inMemory(), stemmerSelector: () => extractTerms})
     })
 })
 
