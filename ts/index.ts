@@ -18,13 +18,14 @@ export interface IndexedDbImplementation {
 }
 
 export type Stemmer = (text: string) => Set<string>
+export type StemmerSelector = (opts: { collectionName: string, fieldName: string }) => Stemmer
 export type SchemaPatcher = (schema: DexieSchema[]) => DexieSchema[]
 
 const IdentitySchemaPatcher: SchemaPatcher = f => f
 
 interface Props {
     dbName: string
-    stemmer?: Stemmer
+    stemmerSelector?: StemmerSelector
     idbImplementation?: IndexedDbImplementation
     /**
      * An optional function to run the generated Dexie schemas through to
@@ -46,21 +47,21 @@ export class DexieStorageBackend extends backend.StorageBackend {
     private dbName : string
     private idbImplementation : IndexedDbImplementation
     private dexie : DexieMongoify
-    private stemmer : Stemmer
+    private stemmerSelector : StemmerSelector
     private schemaPatcher : SchemaPatcher
     private initialized = false
 
     constructor({
         dbName,
         idbImplementation = null,
-        stemmer = null,
+        stemmerSelector = null,
         schemaPatcher = IdentitySchemaPatcher,
     }: Props) {
         super()
 
         this.dbName = dbName
         this.idbImplementation = idbImplementation || { factory: window.indexedDB, range: window['IDBKeyRange'] }
-        this.stemmer = stemmer
+        this.stemmerSelector = stemmerSelector
         this.schemaPatcher = schemaPatcher
     }
 
@@ -81,7 +82,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
             return super.supports(feature)
         }
 
-        return !!this.stemmer
+        return !!this.stemmerSelector
     }
 
     _onRegistryInitialized = () => {
@@ -91,7 +92,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     _validateRegistry() {
-        if (this.stemmer) {
+        if (this.stemmerSelector) {
             return
         }
 
@@ -168,7 +169,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async _rawCreateObject(collection: string, object, options: backend.CreateSingleOptions = {}) {
         const collectionDefinition = this.registry.collections[collection]
-        await _processFieldsForWrites(collectionDefinition, object, this.stemmer)
+        await _processFieldsForWrites(
+            collectionDefinition, 
+            object, 
+            fieldName => this.stemmerSelector({ collectionName: collection, fieldName }),
+        )
         await this.dexie.table(collection).put(object)
 
         return { object }
@@ -240,7 +245,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         for (const object of objects) {
             _processFieldUpdates(updates, object)
-            await _processFieldsForWrites(collectionDefinition, object, this.stemmer)
+            await _processFieldsForWrites(
+                collectionDefinition, 
+                object,
+                fieldName => this.stemmerSelector({ collectionName: collection, fieldName }),
+            )
             await this.dexie.table(collection).put(object)
         }
     }
@@ -383,7 +392,7 @@ export function _processIndexedField(
  * Handles mutation of a document to be written to storage,
  * depending on needed pre-processing of fields.
  */
-export async function _processFieldsForWrites(def: CollectionDefinition, object, stemmer: Stemmer) {
+export async function _processFieldsForWrites(def: CollectionDefinition, object, stemmerSelector: (field: string) => Stemmer) {
     for (const [fieldName, fieldDef] of Object.entries(def.fields)) {
         if (fieldDef.fieldObject) {
             object[fieldName] = await fieldDef.fieldObject.prepareForStorage(
@@ -397,7 +406,7 @@ export async function _processFieldsForWrites(def: CollectionDefinition, object,
                 def.indices[fieldDef._index],
                 fieldDef,
                 object,
-                stemmer
+                stemmerSelector(fieldName)
             )
         }
     }
