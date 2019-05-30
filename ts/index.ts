@@ -12,7 +12,7 @@ import { UnimplementedError, InvalidOptionsError } from '@worldbrain/storex/lib/
 import { _flattenBatch } from './utils';
 import { StemmerSelector, SchemaPatcher } from './types'
 import { _processFieldUpdates } from './update-ops';
-import { makeCleanerChain, _cleanCustomFieldsForReads, _cleanCustomFieldsForWrites, _cleanFullTextIndexFieldsForWrite, _cleanFieldsForWrite } from './object-cleaning';
+import { makeCleanerChain, _cleanCustomFieldsForReads, _cleanCustomFieldsForWrites, _cleanFullTextIndexFieldsForWrite, _cleanFieldAliasesForWrites, _cleanFieldAliasesForReads } from './object-cleaning';
 export { Stemmer, StemmerSelector, SchemaPatcher } from './types'
 
 export interface IndexedDbImplementation {
@@ -51,11 +51,13 @@ export class DexieStorageBackend extends backend.StorageBackend {
     private schemaPatcher : SchemaPatcher
     private initialized = false
     private readObjectCleaner = makeCleanerChain([
+        _cleanFieldAliasesForReads,
         _cleanCustomFieldsForReads,
     ])
     private writeObjectCleaner = makeCleanerChain([
         _cleanCustomFieldsForWrites,
         _cleanFullTextIndexFieldsForWrite,
+        _cleanFieldAliasesForWrites,
     ])
 
     constructor({
@@ -132,15 +134,9 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         const dexieHistory = getDexieHistory(this.registry)
 
-        this.schemaPatcher(dexieHistory).forEach(({ version, schema }) => {
-            this.dexie.version(version)
-                .stores(schema)
-            // .upgrade(() => {
-            //     migrations.forEach(migration => {
-            //         // TODO: Call migration with some object that allows for data manipulation
-            //     })
-            // })
-        })
+        for (const { version, schema } of this.schemaPatcher(dexieHistory)) {
+            this.dexie.version(version).stores(schema)
+        }
     }
 
     async migrate({ database }: { database?: string } = {}) {
@@ -176,7 +172,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async _rawCreateObject(collection: string, object : any, options: backend.CreateSingleOptions = {}) {
         const collectionDefinition = this.registry.collections[collection]
-        await _cleanFieldsForWrite(object, {
+        await this.writeObjectCleaner(object, {
             collectionDefinition, 
             stemmerSelector: this.stemmerSelector,
         })
@@ -210,12 +206,15 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
 
     async findObjects<T>(collection : string, query : any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
+        const collectionDefinition = this.registry.collections[collection]
+        
         const order = findOpts.order && findOpts.order.length ? findOpts.order[0] : null
         if (order && findOpts.order!.length > 1) {
             throw new Error('Sorting on multiple fields is not supported')
         }
         const descendingOrder = findOpts.reverse || (order && order[1] == 'desc')
 
+        await this.writeObjectCleaner(query, { collectionDefinition, stemmerSelector: this.stemmerSelector })
         let coll = findOpts.ignoreCase && findOpts.ignoreCase.length
             ? this._findIgnoreCase<T>(collection, query, findOpts)
             : this.dexie.collection<T>(collection).find(query)
@@ -240,8 +239,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
             results = await coll.toArray()
         }
-        // console.log(results)
-        return results
+        
+        return Promise.all(results.map(object => this.readObjectCleaner(object, {
+            collectionDefinition,
+            stemmerSelector: this.stemmerSelector,
+        })))
     }
 
     async updateObjects(collection: string, where : any, updates : any, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
@@ -251,7 +253,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         for (const object of objects) {
             _processFieldUpdates(updates, object)
-            await _cleanFieldsForWrite(object, {
+            await this.writeObjectCleaner(object, {
                 collectionDefinition,
                 stemmerSelector: this.stemmerSelector,
             })
@@ -307,7 +309,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         const placeholders = {}
         for (const operation of batch) {
             if (operation.operation === 'createObject') {
-                for (const {path, placeholder} of operation.replace || []) {
+                for (const { path, placeholder } of operation.replace || []) {
                     operation.args[path as string] = placeholders[placeholder].id
                 }
 
