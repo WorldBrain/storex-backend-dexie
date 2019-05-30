@@ -1,9 +1,10 @@
 import * as expect from 'expect'
 import { testStorageBackend, testStorageBackendFullTextSearch } from "@worldbrain/storex/lib/index.tests"
 import extractTerms from "@worldbrain/memex-stemmer";
-import { DexieStorageBackend, _flattenBatch } from "."
+import { DexieStorageBackend } from "."
 import inMemory from './in-memory'
 import StorageManager from "@worldbrain/storex";
+import { _flattenBatch } from './utils';
 
 describe('Dexie StorageBackend integration tests', () => {
     testStorageBackend(async () => {

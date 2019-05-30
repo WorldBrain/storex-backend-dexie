@@ -28,15 +28,14 @@
   "devDependencies": {
     "@types/chai": "^4.0.6",
     "@types/events": "^1.2.0",
+    "@types/expect": "^1.20.4",
     "@types/mocha": "^2.2.44",
     "@types/node": "^10.9.4",
-    "@worldbrain/storex": "^0.3.5",
     "@worldbrain/memex-stemmer": "^0.1.0",
-    "chai": "^4.1.2",
+    "@worldbrain/storex": "^0.3.5",
     "expect": "^23.5.0",
     "fake-indexeddb": "^2.0.4",
     "mocha": "^4.0.1",
-    "sinon": "^4.1.2",
     "ts-node": "^7.0.1",
     "typescript": "^3.0.1"
   },

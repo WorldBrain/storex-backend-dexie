@@ -38,11 +38,11 @@ function getDexieSchema(collections: RegistryCollections) {
  * Handles converting from StorageManager index definitions to Dexie index expressions.
  */
 function convertIndexToDexieExps({ name: collection, fields, indices, relationshipsByAlias }: CollectionDefinition) {
-    return indices
+    return (indices || [])
         .sort(({ pk }) => (pk ? -1 : 1)) // PK indexes always come first in Dexie
         .map((indexDef) => {
             const fieldNameFromRelationshipReference = (reference: RelationshipReference): string | string[] => {
-                const relationship = relationshipsByAlias[reference.relationship]
+                const relationship = relationshipsByAlias![reference.relationship]
                 if (!relationship) {
                     throw new Error(
                         `You tried to create an index in collection
@@ -51,9 +51,9 @@ function convertIndexToDexieExps({ name: collection, fields, indices, relationsh
                 }
 
                 if (isChildOfRelationship(relationship)) {
-                    return relationship.fieldName
+                    return relationship.fieldName!
                 } else if (isConnectsRelationship(relationship)) {
-                    return relationship.fieldNames
+                    return relationship.fieldNames!
                 } else {
                     throw new Error(`Unsupported relationship index in collection '${name}'`)
                 }

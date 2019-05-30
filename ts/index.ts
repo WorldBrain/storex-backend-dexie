@@ -5,21 +5,21 @@ import { StorageRegistry } from '@worldbrain/storex'
 import { CreateObjectDissection, dissectCreateObjectOperation, convertCreateObjectDissectionToBatch, setIn } from '@worldbrain/storex/lib/utils'
 // import { CollectionDefinition } from 'storex/types'
 import * as backend from '@worldbrain/storex/lib/types/backend'
-import { augmentCreateObject } from '@worldbrain/storex/lib/backend/utils'
-import { getDexieHistory, getTermsIndex } from './schema'
-import { DexieMongoify, DexieSchema, UpdateOps } from './types'
-import { IndexDefinition, CollectionField, CollectionDefinition } from '@worldbrain/storex/lib/types';
+import { getDexieHistory } from './schema'
+import { DexieMongoify, DexieSchema } from './types'
 import { StorageBackendFeatureSupport } from '@worldbrain/storex/lib/types/backend-features';
 import { UnimplementedError, InvalidOptionsError } from '@worldbrain/storex/lib/types/errors';
+import { _flattenBatch } from './utils';
+import { StemmerSelector, SchemaPatcher } from './types'
+import { _processFieldUpdates } from './update-ops';
+import { makeCleanerChain, _cleanCustomFieldsForReads, _cleanCustomFieldsForWrites, _cleanFullTextIndexFieldsForWrite, _cleanFieldsForWrite } from './object-cleaning';
+export { Stemmer, StemmerSelector, SchemaPatcher } from './types'
 
 export interface IndexedDbImplementation {
     factory: IDBFactory
     range: new () => IDBKeyRange
 }
 
-export type Stemmer = (text: string) => Set<string>
-export type StemmerSelector = (opts: { collectionName: string, fieldName: string }) => Stemmer
-export type SchemaPatcher = (schema: DexieSchema[]) => DexieSchema[]
 
 const IdentitySchemaPatcher: SchemaPatcher = f => f
 
@@ -36,7 +36,7 @@ interface Props {
 }
 
 export class DexieStorageBackend extends backend.StorageBackend {
-    features: StorageBackendFeatureSupport = {
+    public features: StorageBackendFeatureSupport = {
         count: true,
         createWithRelationships: true,
         fullTextSearch: true,
@@ -46,14 +46,21 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     private dbName : string
     private idbImplementation : IndexedDbImplementation
-    private dexie : DexieMongoify
+    private dexie! : DexieMongoify
     private stemmerSelector : StemmerSelector
     private schemaPatcher : SchemaPatcher
     private initialized = false
+    private readObjectCleaner = makeCleanerChain([
+        _cleanCustomFieldsForReads,
+    ])
+    private writeObjectCleaner = makeCleanerChain([
+        _cleanCustomFieldsForWrites,
+        _cleanFullTextIndexFieldsForWrite,
+    ])
 
     constructor({
         dbName,
-        idbImplementation = null,
+        idbImplementation = undefined,
         stemmerSelector = () => null,
         schemaPatcher = IdentitySchemaPatcher,
     }: Props) {
@@ -98,7 +105,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         // See if we're trying to create full-text indices without providing a stemmer
         for (const [collectionName, collectionDefinition] of Object.entries(this.registry.collections)) {
-            for (const index of collectionDefinition.indices) {
+            for (const index of collectionDefinition.indices || []) {
                 if (typeof index === 'string') {
                     const field = collectionDefinition.fields[index]
                     if (field.type === 'text') {
@@ -119,7 +126,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }) as DexieMongoify
 
         // DexieMongofiy binds the .collection to the last DB created, creating confusing situations when using multiple DBs at the same time
-        Dexie.prototype['collection'] = function collection(collectionName) {
+        Dexie.prototype['collection'] = function collection(collectionName : string) {
             return this.table(collectionName);
         }
 
@@ -146,11 +153,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     }
 
-    async createObject(collection: string, object, options: backend.CreateSingleOptions = {}): Promise<backend.CreateSingleResult> {
+    async createObject(collection: string, object : any, options: backend.CreateSingleOptions = {}): Promise<backend.CreateSingleResult> {
         return this._complexCreateObject(collection, object, {...options, needsRawCreates: false})
     }
 
-    async _complexCreateObject(collection: string, object, options: backend.CreateSingleOptions & {needsRawCreates : boolean}) {
+    async _complexCreateObject(collection: string, object : any, options: backend.CreateSingleOptions & {needsRawCreates : boolean}) {
         const dissection = dissectCreateObjectOperation({operation: 'createObject', collection, args: object}, this.registry)
         const batchToExecute = convertCreateObjectDissectionToBatch(dissection)
         const batchResult = await this._rawExecuteBatch(batchToExecute, {needsRawCreates: true})
@@ -159,7 +166,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return { object }
     }
 
-    async _reconstructCreatedObject(object, collection : string, operationDissection : CreateObjectDissection, batchResultInfo) {
+    async _reconstructCreatedObject(object : any, collection : string, operationDissection : CreateObjectDissection, batchResultInfo : any) {
         for (const step of operationDissection.objects) {
             const collectionDefiniton = this.registry.collections[collection]
             const pkIndex = collectionDefiniton.pkIndex
@@ -167,20 +174,19 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async _rawCreateObject(collection: string, object, options: backend.CreateSingleOptions = {}) {
+    async _rawCreateObject(collection: string, object : any, options: backend.CreateSingleOptions = {}) {
         const collectionDefinition = this.registry.collections[collection]
-        await _processFieldsForWrites(
+        await _cleanFieldsForWrite(object, {
             collectionDefinition, 
-            object, 
-            fieldName => this.stemmerSelector({ collectionName: collection, fieldName }),
-        )
+            stemmerSelector: this.stemmerSelector,
+        })
         await this.dexie.table(collection).put(object)
 
         return { object }
     }
 
     // TODO: Afford full find support for ignoreCase opt; currently just uses the first filter entry
-    private _findIgnoreCase<T>(collection: string, query, findOpts: backend.FindManyOptions = {}) {
+    private _findIgnoreCase<T>(collection: string, query : any, findOpts: backend.FindManyOptions = {}) {
         // Grab first entry from the filter query; ignore rest for now
         const [[indexName, value], ...fields] = Object.entries<string>(query)
 
@@ -190,7 +196,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
             )
         }
 
-        if (findOpts.ignoreCase[0] !== indexName) {
+        if (findOpts.ignoreCase && findOpts.ignoreCase[0] !== indexName) {
             throw new InvalidOptionsError(
                 `Specified ignoreCase field '${findOpts.ignoreCase[0]}' is not in filter query.`,
             )
@@ -203,9 +209,9 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
 
-    async findObjects<T>(collection: string, query, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
+    async findObjects<T>(collection : string, query : any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
         const order = findOpts.order && findOpts.order.length ? findOpts.order[0] : null
-        if (order && findOpts.order.length > 1) {
+        if (order && findOpts.order!.length > 1) {
             throw new Error('Sorting on multiple fields is not supported')
         }
         const descendingOrder = findOpts.reverse || (order && order[1] == 'desc')
@@ -238,23 +244,22 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return results
     }
 
-    async updateObjects(collection: string, query, updates, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
+    async updateObjects(collection: string, where : any, updates : any, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
         const collectionDefinition = this.registry.collections[collection]
 
-        const objects = await this.findObjects(collection, query, options)
+        const objects = await this.findObjects(collection, where, options)
 
         for (const object of objects) {
             _processFieldUpdates(updates, object)
-            await _processFieldsForWrites(
-                collectionDefinition, 
-                object,
-                fieldName => this.stemmerSelector({ collectionName: collection, fieldName }),
-            )
+            await _cleanFieldsForWrite(object, {
+                collectionDefinition,
+                stemmerSelector: this.stemmerSelector,
+            })
             await this.dexie.table(collection).put(object)
         }
     }
 
-    async deleteObjects(collection: string, query, options: backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
+    async deleteObjects(collection : string, query : any, options : backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
         const { deletedCount } = await this.dexie
             .collection(collection)
             .remove(query)
@@ -262,7 +267,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         // return deletedCount
     }
 
-    async countObjects(collection: string, query) {
+    async countObjects(collection: string, query : any) {
         return this.dexie.collection(collection).count(query)
     }
 
@@ -281,7 +286,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async transaction(options : { collections: string[] }, body : Function) {
         const executeBody = async () => {
-            return body({ transactionOperation: (name : string, ...args) => {
+            return body({ transactionOperation: (name : string, ...args : any[]) => {
                 return this.operation(name, ...args)
             } })
         }
@@ -309,8 +314,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
                 const { object } = options.needsRawCreates
                     ? await this._rawCreateObject(operation.collection, operation.args)
                     : await this._complexCreateObject(operation.collection, operation.args, {needsRawCreates: true})
-                info[operation.placeholder] = {object}
-                placeholders[operation.placeholder] = object
+
+                if (operation.placeholder) {
+                    info[operation.placeholder] = {object}
+                    placeholders[operation.placeholder] = object
+                }
             } else if (operation.operation === 'updateObjects') {
                 await this.updateObjects(operation.collection, operation.where, operation.updates)
             }
@@ -318,140 +326,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return { info }
     }
 
-    async operation(name : string, ...args) {
+    async operation(name : string, ...args : any[]) {
         if (!this.initialized) {
             throw new Error('Tried to use Dexie backend without calling StorageManager.finishInitialization() first')
         }
         // console.log('operation', name)
         return await super.operation(name, ...args)
     }
-}
-
-
-/**
- * Handles mutation of a document, updating each field in the way specified
- * in the `updates` object.
- * See for more info: https://github.com/YurySolovyov/dexie-mongoify/blob/master/docs/update-api.md
- *
- * TODO: Proper runtime error handling for badly formed update objs.
- */
-export function _processFieldUpdates(updates, object) {
-    // TODO: Find a home for this
-    // TODO: Support all update ops
-    const updateOpAppliers: UpdateOps = {
-        $inc: (obj, key, value) => (obj[key] += value),
-        $set: (obj, key, value) => (obj[key] = value),
-        $mul: (obj, key, value) => (obj[key] *= value),
-        $unset: (obj, key) => (obj[key] = undefined),
-        $rename: () => undefined,
-        $min: () => undefined,
-        $max: () => undefined,
-        $addToSet: () => undefined,
-        $pop: () => undefined,
-        $push: () => undefined,
-        $pull: () => undefined,
-        $pullAll: () => undefined,
-        $slice: () => undefined,
-        $sort: () => undefined,
-    }
-
-    for (const [updateKey, updateVal] of Object.entries(updates)) {
-        // If supported update op, run assoc. update op applier
-        if (updateOpAppliers[updateKey] != null) {
-            Object.entries(updateVal).forEach(([key, val]) =>
-                updateOpAppliers[updateKey](object, key, val))
-        } else {
-            object[updateKey] = updateVal
-        }
-    }
-}
-
-/**
- * Handles mutation of a document to be inserted/updated to storage,
- * depending on needed pre-processing for a given indexed field.
- */
-export function _processIndexedField(
-    fieldName: string,
-    indexDef: IndexDefinition,
-    fieldDef: CollectionField,
-    object,
-    stemmer: Stemmer,
-) {
-    switch (fieldDef.type) {
-        case 'text':
-            const fullTextField =
-                indexDef.fullTextIndexName ||
-                getTermsIndex(fieldName)
-            object[fullTextField] = [...stemmer(object[fieldName])]
-            break
-        default:
-    }
-}
-
-/**
- * Handles mutation of a document to be written to storage,
- * depending on needed pre-processing of fields.
- */
-export async function _processFieldsForWrites(def: CollectionDefinition, object, stemmerSelector: (field: string) => Stemmer) {
-    for (const [fieldName, fieldDef] of Object.entries(def.fields)) {
-        if (fieldDef.fieldObject) {
-            object[fieldName] = await fieldDef.fieldObject.prepareForStorage(
-                object[fieldName],
-            )
-        }
-
-        if (fieldDef._index != null) {
-            _processIndexedField(
-                fieldName,
-                def.indices[fieldDef._index],
-                fieldDef,
-                object,
-                stemmerSelector(fieldName)
-            )
-        }
-    }
-}
-
-/**
- * Handles mutation of a document to be read from storage,
- * depending on needed pre-processing of fields.
- */
-export function _processFieldsForReads(def: CollectionDefinition, object) {
-    Object.entries(def.fields).forEach(([fieldName, fieldDef]) => {
-        if (fieldDef.fieldObject) {
-            object[fieldName] = fieldDef.fieldObject.prepareFromStorage(
-                object[fieldName],
-            )
-        }
-    })
-}
-
-export function _flattenBatch(originalBatch, registry : StorageRegistry) {
-    const generatedBatch = []
-    let placeholdersGenerated = 0
-    for (const step of originalBatch) {
-        if (step.operation !== 'createObject') {
-            generatedBatch.push(step)
-            continue
-        }
-
-        const dissection = dissectCreateObjectOperation(step, registry, {
-            generatePlaceholder: (() => {
-                let isFirst = true
-                return () => {
-                    if (isFirst) {
-                        isFirst = false
-                        return step.placeholder
-                    } else {
-                        return `auto-gen:${++placeholdersGenerated}`
-                    }
-                }
-            })()
-        })
-        const creationBatch = convertCreateObjectDissectionToBatch(dissection)
-        for (const object of creationBatch) {
-            generatedBatch.push(object)
-        }
-    }
-    return generatedBatch
 }
