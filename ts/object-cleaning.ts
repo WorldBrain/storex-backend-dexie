@@ -22,6 +22,11 @@ export const _cleanFullTextIndexFieldsForWrite : ObjectCleaner = async (object :
                 if (fieldDef._index == null) {
                     continue
                 }
+
+                const fieldValue = object[fieldName]
+                if (!fieldValue) {
+                    continue
+                }
                 
                 if (!options.stemmerSelector) {
                     throw new Error(`You tried to write to an indexed text field (${fieldName}) without specifying a stemmer selector`)
@@ -36,7 +41,7 @@ export const _cleanFullTextIndexFieldsForWrite : ObjectCleaner = async (object :
                 const fullTextField =
                     indexDef.fullTextIndexName ||
                     getTermsIndex(fieldName)
-                object[fullTextField] = [...stemmer(object[fieldName])]
+                object[fullTextField] = [...stemmer(fieldValue)]
                 break
             default:
         }
@@ -45,7 +50,7 @@ export const _cleanFullTextIndexFieldsForWrite : ObjectCleaner = async (object :
 
 export const _cleanCustomFieldsForWrites : ObjectCleaner = async (object : any, options : ObjectCleanerOptions) => {
     for (const [fieldName, fieldDef] of Object.entries(options.collectionDefinition.fields)) {
-        if (fieldDef.fieldObject) {
+        if (fieldDef.fieldObject && Object.keys(object).includes(fieldName)) {
             object[fieldName] = await fieldDef.fieldObject.prepareForStorage(
                 object[fieldName],
             )
