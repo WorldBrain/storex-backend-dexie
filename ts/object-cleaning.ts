@@ -5,7 +5,7 @@ import { isChildOfRelationship, isConnectsRelationship } from "@worldbrain/store
 export function makeCleanerChain(cleaners : ObjectCleaner[]) : ObjectCleaner {
     return async (object : any, options : ObjectCleanerOptions) => {
         for (const cleaner of cleaners) {
-            object = await cleaner(object, options) || object
+            object = (await cleaner(object, options)) || object
         }
         return object
     }
@@ -48,22 +48,23 @@ export const _cleanFullTextIndexFieldsForWrite : ObjectCleaner = async (object :
     }
 }
 
-export const _cleanCustomFieldsForWrites : ObjectCleaner = async (object : any, options : ObjectCleanerOptions) => {
-    for (const [fieldName, fieldDef] of Object.entries(options.collectionDefinition.fields)) {
-        if (fieldDef.fieldObject && Object.keys(object).includes(fieldName)) {
-            object[fieldName] = await fieldDef.fieldObject.prepareForStorage(
-                object[fieldName],
-            )
-        }
-    }
-}
+export function _makeCustomFieldCleaner(options : { purpose : 'query-where' | 'create' | 'update' | 'read' }) : ObjectCleaner {
+    const purpose = options.purpose
+    const direction = purpose === 'read' ? 'from-storage' : 'to-storage'
+    const method = direction === 'from-storage' ? 'prepareFromStorage' : 'prepareForStorage'
+    return async (object : any, options : ObjectCleanerOptions) => {
+        for (const [fieldName, fieldDef] of Object.entries(options.collectionDefinition.fields)) {
+            if (fieldDef.fieldObject) {
+                const oldValue = object[fieldName]
+                if (purpose !== 'create' && !Object.keys(object).includes(fieldName)) {
+                    continue
+                }
 
-export const _cleanCustomFieldsForReads : ObjectCleaner = async (object : any, options : ObjectCleanerOptions) => {
-    for (const [fieldName, fieldDef] of Object.entries(options.collectionDefinition.fields)) {
-        if (fieldDef.fieldObject) {
-            object[fieldName] = fieldDef.fieldObject.prepareFromStorage(
-                object[fieldName],
-            )
+                const newValue = await fieldDef.fieldObject[method](
+                    oldValue,
+                )
+                object[fieldName] = newValue
+            }
         }
     }
 }

@@ -12,14 +12,13 @@ import { UnimplementedError, InvalidOptionsError } from '@worldbrain/storex/lib/
 import { _flattenBatch } from './utils';
 import { StemmerSelector, Stemmer, SchemaPatcher } from './types'
 import { _processFieldUpdates } from './update-ops';
-import { makeCleanerChain, _cleanCustomFieldsForReads, _cleanCustomFieldsForWrites, _cleanFullTextIndexFieldsForWrite, _cleanFieldAliasesForWrites, _cleanFieldAliasesForReads } from './object-cleaning';
+import { makeCleanerChain, _makeCustomFieldCleaner, _cleanFullTextIndexFieldsForWrite, _cleanFieldAliasesForWrites, _cleanFieldAliasesForReads } from './object-cleaning';
 export { Stemmer, StemmerSelector, SchemaPatcher } from './types'
 
 export interface IndexedDbImplementation {
     factory: IDBFactory
     range: new () => IDBKeyRange
 }
-
 
 const IdentitySchemaPatcher: SchemaPatcher = f => f
 
@@ -53,15 +52,20 @@ export class DexieStorageBackend extends backend.StorageBackend {
     private initialized = false
     private readObjectCleaner = makeCleanerChain([
         _cleanFieldAliasesForReads,
-        _cleanCustomFieldsForReads,
+        _makeCustomFieldCleaner({ purpose: 'read' }),
     ])
-    private writeObjectCleaner = makeCleanerChain([
-        _cleanCustomFieldsForWrites,
+    private createObjectCleaner = makeCleanerChain([
+        _makeCustomFieldCleaner({ purpose: 'create' }),
+        _cleanFullTextIndexFieldsForWrite,
+        _cleanFieldAliasesForWrites,
+    ])
+    private updateObjectCleaner = makeCleanerChain([
+        _makeCustomFieldCleaner({ purpose: 'create' }),
         _cleanFullTextIndexFieldsForWrite,
         _cleanFieldAliasesForWrites,
     ])
     private whereObjectCleaner = makeCleanerChain([
-        _cleanCustomFieldsForWrites,
+        _makeCustomFieldCleaner({ purpose: 'query-where' }),
         _cleanFieldAliasesForWrites,
     ])
 
@@ -188,7 +192,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async _rawCreateObject(collection: string, object : any, options: backend.CreateSingleOptions = {}) {
         const collectionDefinition = this.registry.collections[collection]
-        await this.writeObjectCleaner(object, {
+        await this.createObjectCleaner(object, {
             collectionDefinition, 
             stemmerSelector: this.stemmerSelector,
         })
@@ -256,10 +260,14 @@ export class DexieStorageBackend extends backend.StorageBackend {
             results = await coll.toArray()
         }
         
-        return Promise.all(results.map(object => this.readObjectCleaner(object, {
-            collectionDefinition,
-            stemmerSelector: this.stemmerSelector,
-        })))
+        await Promise.all(results.map(async object => {
+            await this.readObjectCleaner(object, {
+                collectionDefinition,
+                stemmerSelector: this.stemmerSelector,
+            })
+        }))
+        
+        return results
     }
 
     async updateObjects(collection: string, where : any, updates : any, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
@@ -269,7 +277,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         for (const object of objects) {
             _processFieldUpdates(updates, object)
-            await this.writeObjectCleaner(object, {
+            await this.updateObjectCleaner(object, {
                 collectionDefinition,
                 stemmerSelector: this.stemmerSelector,
             })
@@ -278,6 +286,13 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     async deleteObjects(collection : string, query : any, options : backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
+        const collectionDefinition = this.registry.collections[collection]
+        
+        this.whereObjectCleaner(query, {
+            collectionDefinition,
+            stemmerSelector: this.stemmerSelector,
+        })
+
         const { deletedCount } = await this.dexie
             .collection(collection)
             .remove(query)
