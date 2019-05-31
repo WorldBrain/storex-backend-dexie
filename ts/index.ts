@@ -10,7 +10,7 @@ import { DexieMongoify, DexieSchema } from './types'
 import { StorageBackendFeatureSupport } from '@worldbrain/storex/lib/types/backend-features';
 import { UnimplementedError, InvalidOptionsError } from '@worldbrain/storex/lib/types/errors';
 import { _flattenBatch } from './utils';
-import { StemmerSelector, SchemaPatcher } from './types'
+import { StemmerSelector, Stemmer, SchemaPatcher } from './types'
 import { _processFieldUpdates } from './update-ops';
 import { makeCleanerChain, _cleanCustomFieldsForReads, _cleanCustomFieldsForWrites, _cleanFullTextIndexFieldsForWrite, _cleanFieldAliasesForWrites, _cleanFieldAliasesForReads } from './object-cleaning';
 export { Stemmer, StemmerSelector, SchemaPatcher } from './types'
@@ -23,8 +23,9 @@ export interface IndexedDbImplementation {
 
 const IdentitySchemaPatcher: SchemaPatcher = f => f
 
-interface Props {
+export interface DexieStorageBackendOptions {
     dbName: string
+    stemmer?: Stemmer
     stemmerSelector?: StemmerSelector
     idbImplementation?: IndexedDbImplementation
     /**
@@ -59,14 +60,29 @@ export class DexieStorageBackend extends backend.StorageBackend {
         _cleanFullTextIndexFieldsForWrite,
         _cleanFieldAliasesForWrites,
     ])
+    private whereObjectCleaner = makeCleanerChain([
+        _cleanCustomFieldsForWrites,
+        _cleanFieldAliasesForWrites,
+    ])
 
     constructor({
         dbName,
         idbImplementation = undefined,
-        stemmerSelector = () => null,
+        stemmer = undefined,
+        stemmerSelector = undefined,
         schemaPatcher = IdentitySchemaPatcher,
-    }: Props) {
+    }: DexieStorageBackendOptions) {
         super()
+
+        if (!stemmerSelector) {
+            if (stemmer) {
+                stemmerSelector = () => stemmer
+            } else {
+                stemmerSelector = () => null
+            }
+        } else if (stemmer) {
+            throw new Error(`You cannot pass both a 'stemmer' and a 'stemmerSelector' into DexieStorageBackend`)
+        }
 
         this.dbName = dbName
         this.idbImplementation = idbImplementation || { factory: window.indexedDB, range: window['IDBKeyRange'] }
@@ -214,7 +230,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
         const descendingOrder = findOpts.reverse || (order && order[1] == 'desc')
 
-        await this.writeObjectCleaner(query, { collectionDefinition, stemmerSelector: this.stemmerSelector })
+        await this.whereObjectCleaner(query, { collectionDefinition, stemmerSelector: this.stemmerSelector })
         let coll = findOpts.ignoreCase && findOpts.ignoreCase.length
             ? this._findIgnoreCase<T>(collection, query, findOpts)
             : this.dexie.collection<T>(collection).find(query)

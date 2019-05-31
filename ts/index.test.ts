@@ -13,8 +13,16 @@ describe('Dexie StorageBackend integration tests', () => {
 })
 
 describe('Dexie StorageBackend full-text search with Memex stemmer tests', () => {
-    testStorageBackendFullTextSearch(async () => {
-        return new DexieStorageBackend({dbName: 'unittest', idbImplementation: inMemory(), stemmerSelector: () => extractTerms})
+    describe('with single stemmer', () => {
+        testStorageBackendFullTextSearch(async () => {
+            return new DexieStorageBackend({dbName: 'unittest', idbImplementation: inMemory(), stemmer: extractTerms})
+        })
+    })
+
+    describe('with stemmer selector', () => {
+        testStorageBackendFullTextSearch(async () => {
+            return new DexieStorageBackend({dbName: 'unittest', idbImplementation: inMemory(), stemmerSelector: () => extractTerms})
+        })
     })
 })
 
