@@ -1,7 +1,7 @@
 import Dexie from 'dexie'
 import 'dexie-mongoify'
 
-import { StorageRegistry } from '@worldbrain/storex'
+import { StorageRegistry, CollectionDefinition } from '@worldbrain/storex'
 import { CreateObjectDissection, dissectCreateObjectOperation, convertCreateObjectDissectionToBatch, setIn } from '@worldbrain/storex/lib/utils'
 // import { CollectionDefinition } from 'storex/types'
 import * as backend from '@worldbrain/storex/lib/types/backend'
@@ -191,7 +191,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     async _rawCreateObject(collection: string, object : any, options: backend.CreateSingleOptions = {}) {
-        const collectionDefinition = this.registry.collections[collection]
+        const { collectionDefinition } = this._prepareOperation({ operationName: 'createObject', collection })
+        
         await this.createObjectCleaner(object, {
             collectionDefinition, 
             stemmerSelector: this.stemmerSelector,
@@ -226,7 +227,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
 
     async findObjects<T>(collection : string, query : any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
-        const collectionDefinition = this.registry.collections[collection]
+        const { collectionDefinition } = this._prepareOperation({ operationName: 'findObjects', collection })
         
         const order = findOpts.order && findOpts.order.length ? findOpts.order[0] : null
         if (order && findOpts.order!.length > 1) {
@@ -271,22 +272,23 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     async updateObjects(collection: string, where : any, updates : any, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
-        const collectionDefinition = this.registry.collections[collection]
+        const { collectionDefinition } = this._prepareOperation({ operationName: 'updateObjects', collection })
+        
+        await this.updateObjectCleaner(updates, {
+            collectionDefinition,
+            stemmerSelector: this.stemmerSelector,
+        })
 
         const objects = await this.findObjects(collection, where, options)
 
         for (const object of objects) {
             _processFieldUpdates(updates, object)
-            await this.updateObjectCleaner(object, {
-                collectionDefinition,
-                stemmerSelector: this.stemmerSelector,
-            })
             await this.dexie.table(collection).put(object)
         }
     }
 
     async deleteObjects(collection : string, query : any, options : backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
-        const collectionDefinition = this.registry.collections[collection]
+        const { collectionDefinition } = this._prepareOperation({ operationName: 'deleteObjects', collection })
         
         this.whereObjectCleaner(query, {
             collectionDefinition,
@@ -365,5 +367,13 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
         // console.log('operation', name)
         return await super.operation(name, ...args)
+    }
+
+    _prepareOperation(options : { operationName : string, collection : string }) : { collectionDefinition : CollectionDefinition } {
+        const collectionDefinition = this.registry.collections[options.collection]
+        if (!collectionDefinition) {
+            throw new Error(`Tried to do '${options.operationName}' operation on non-existing collection: ${options.collection}`)
+        }
+        return { collectionDefinition }
     }
 }
