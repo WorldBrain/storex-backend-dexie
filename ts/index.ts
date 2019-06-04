@@ -356,6 +356,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
                 }
             } else if (operation.operation === 'updateObjects') {
                 await this.updateObjects(operation.collection, operation.where, operation.updates)
+            } else if (operation.operation === 'deleteObjects') {
+                await this.deleteObjects(operation.collection, operation.where)
             }
         }
         return { info }
