@@ -1,7 +1,13 @@
-import { StorageRegistry, OperationBatch } from "@worldbrain/storex";
-import { dissectCreateObjectOperation, convertCreateObjectDissectionToBatch } from "@worldbrain/storex/lib/utils";
+import { StorageRegistry, OperationBatch } from '@worldbrain/storex'
+import {
+    dissectCreateObjectOperation,
+    convertCreateObjectDissectionToBatch,
+} from '@worldbrain/storex/lib/utils'
 
-export function _flattenBatch(originalBatch : OperationBatch, registry : StorageRegistry) {
+export function _flattenBatch(
+    originalBatch: OperationBatch,
+    registry: StorageRegistry,
+) {
     const generatedBatch = []
     let placeholdersGenerated = 0
     const generatePlaceholder = () => `auto-gen:${++placeholdersGenerated}`
@@ -23,7 +29,7 @@ export function _flattenBatch(originalBatch : OperationBatch, registry : Storage
                         return generatePlaceholder()
                     }
                 }
-            })()
+            })(),
         })
         const creationBatch = convertCreateObjectDissectionToBatch(dissection)
         for (const object of creationBatch) {
