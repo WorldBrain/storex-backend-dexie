@@ -313,6 +313,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
                 placeholders[operation.placeholder] = object
             } else if (operation.operation === 'updateObjects') {
                 await this.updateObjects(operation.collection, operation.where, operation.updates)
+            } else if (operation.operation === 'deleteObjects') {
+                await this.deleteObjects(operation.collection, operation.where)
             }
         }
         return { info }
