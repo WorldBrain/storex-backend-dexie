@@ -1,9 +1,12 @@
-import { getTermsIndex } from "./schema";
-import { ObjectCleaner, ObjectCleanerOptions } from "./types";
-import { isChildOfRelationship, isConnectsRelationship } from "@worldbrain/storex";
+import { getTermsIndex } from './schema'
+import { ObjectCleaner, ObjectCleanerOptions } from './types'
+import {
+    isChildOfRelationship,
+    isConnectsRelationship,
+} from '@worldbrain/storex'
 
-export function makeCleanerChain(cleaners : ObjectCleaner[]) : ObjectCleaner {
-    return async (object : any, options : ObjectCleanerOptions) => {
+export function makeCleanerChain(cleaners: ObjectCleaner[]): ObjectCleaner {
+    return async (object: any, options: ObjectCleanerOptions) => {
         for (const cleaner of cleaners) {
             object = (await cleaner(object, options)) || object
         }
@@ -15,8 +18,13 @@ export function makeCleanerChain(cleaners : ObjectCleaner[]) : ObjectCleaner {
  * Handles mutation of a document to be inserted/updated to storage,
  * depending on needed pre-processing for a given indexed field.
  */
-export const _cleanFullTextIndexFieldsForWrite : ObjectCleaner = async (object : any, options : ObjectCleanerOptions) => {
-    for (const [fieldName, fieldDef] of Object.entries(options.collectionDefinition.fields)) {
+export const _cleanFullTextIndexFieldsForWrite: ObjectCleaner = async (
+    object: any,
+    options: ObjectCleanerOptions,
+) => {
+    for (const [fieldName, fieldDef] of Object.entries(
+        options.collectionDefinition.fields,
+    )) {
         switch (fieldDef.type) {
             case 'text':
                 if (fieldDef._index == null) {
@@ -27,20 +35,28 @@ export const _cleanFullTextIndexFieldsForWrite : ObjectCleaner = async (object :
                 if (!fieldValue) {
                     continue
                 }
-                
+
                 if (!options.stemmerSelector) {
-                    throw new Error(`You tried to write to an indexed text field (${fieldName}) without specifying a stemmer selector`)
+                    throw new Error(
+                        `You tried to write to an indexed text field (${fieldName}) without specifying a stemmer selector`,
+                    )
                 }
 
-                const stemmer = options.stemmerSelector({ collectionName: options.collectionDefinition.name!, fieldName })
+                const stemmer = options.stemmerSelector({
+                    collectionName: options.collectionDefinition.name!,
+                    fieldName,
+                })
                 if (!stemmer) {
-                    throw new Error(`You tried to write to an indexed text field (${fieldName}) without specifying a stemmer for that field`)
+                    throw new Error(
+                        `You tried to write to an indexed text field (${fieldName}) without specifying a stemmer for that field`,
+                    )
                 }
 
-                const indexDef = options.collectionDefinition.indices![fieldDef._index]
+                const indexDef = options.collectionDefinition.indices![
+                    fieldDef._index
+                ]
                 const fullTextField =
-                    indexDef.fullTextIndexName ||
-                    getTermsIndex(fieldName)
+                    indexDef.fullTextIndexName || getTermsIndex(fieldName)
                 object[fullTextField] = [...stemmer(fieldValue)]
                 break
             default:
@@ -48,58 +64,85 @@ export const _cleanFullTextIndexFieldsForWrite : ObjectCleaner = async (object :
     }
 }
 
-export function _makeCustomFieldCleaner(options : { purpose : 'query-where' | 'create' | 'update' | 'read' }) : ObjectCleaner {
+export function _makeCustomFieldCleaner(options: {
+    purpose: 'query-where' | 'create' | 'update' | 'read'
+}): ObjectCleaner {
     const purpose = options.purpose
     const direction = purpose === 'read' ? 'from-storage' : 'to-storage'
-    const method = direction === 'from-storage' ? 'prepareFromStorage' : 'prepareForStorage'
-    return async (object : any, options : ObjectCleanerOptions) => {
-        for (const [fieldName, fieldDef] of Object.entries(options.collectionDefinition.fields)) {
+    const method =
+        direction === 'from-storage'
+            ? 'prepareFromStorage'
+            : 'prepareForStorage'
+    return async (object: any, options: ObjectCleanerOptions) => {
+        for (const [fieldName, fieldDef] of Object.entries(
+            options.collectionDefinition.fields,
+        )) {
             if (fieldDef.fieldObject) {
                 const oldValue = object[fieldName]
-                if (purpose !== 'create' && !Object.keys(object).includes(fieldName)) {
+                if (
+                    purpose !== 'create' &&
+                    !Object.keys(object).includes(fieldName)
+                ) {
                     continue
                 }
 
-                const newValue = await fieldDef.fieldObject[method](
-                    oldValue,
-                )
+                const newValue = await fieldDef.fieldObject[method](oldValue)
                 object[fieldName] = newValue
             }
         }
     }
 }
 
-export const _cleanFieldAliasesForWrites : ObjectCleaner = async (object : any, options : ObjectCleanerOptions) => {
-    for (const relationship of options.collectionDefinition.relationships || []) {
+export const _cleanFieldAliasesForWrites: ObjectCleaner = async (
+    object: any,
+    options: ObjectCleanerOptions,
+) => {
+    for (const relationship of options.collectionDefinition.relationships ||
+        []) {
         if (isChildOfRelationship(relationship)) {
-            if (relationship.alias !== relationship.fieldName && typeof object[relationship.alias!] !== 'undefined') {
+            if (
+                relationship.alias !== relationship.fieldName &&
+                typeof object[relationship.alias!] !== 'undefined'
+            ) {
                 object[relationship.fieldName!] = object[relationship.alias!]
                 delete object[relationship.alias!]
             }
         } else if (isConnectsRelationship(relationship)) {
-            if (relationship.aliases![0] !== relationship.fieldNames![0] && typeof object[relationship.aliases![0]] !== 'undefined') {
-                
+            if (
+                relationship.aliases![0] !== relationship.fieldNames![0] &&
+                typeof object[relationship.aliases![0]] !== 'undefined'
+            ) {
             }
-            if (relationship.aliases![1] !== relationship.fieldNames![1] && typeof object[relationship.aliases![1]] !== 'undefined') {
-
+            if (
+                relationship.aliases![1] !== relationship.fieldNames![1] &&
+                typeof object[relationship.aliases![1]] !== 'undefined'
+            ) {
             }
         }
     }
 }
 
-export const _cleanFieldAliasesForReads : ObjectCleaner = async (object : any, options : ObjectCleanerOptions) => {
-    for (const relationship of options.collectionDefinition.relationships || []) {
+export const _cleanFieldAliasesForReads: ObjectCleaner = async (
+    object: any,
+    options: ObjectCleanerOptions,
+) => {
+    for (const relationship of options.collectionDefinition.relationships ||
+        []) {
         if (isChildOfRelationship(relationship)) {
             if (relationship.alias !== relationship.fieldName) {
                 object[relationship.alias!] = object[relationship.fieldName!]
                 delete object[relationship.fieldName!]
             }
         } else if (isConnectsRelationship(relationship)) {
-            if (relationship.aliases![0] !== relationship.fieldNames![0] && typeof object[relationship.aliases![0]] !== 'undefined') {
-
+            if (
+                relationship.aliases![0] !== relationship.fieldNames![0] &&
+                typeof object[relationship.aliases![0]] !== 'undefined'
+            ) {
             }
-            if (relationship.aliases![1] !== relationship.fieldNames![1] && typeof object[relationship.aliases![1]] !== 'undefined') {
-
+            if (
+                relationship.aliases![1] !== relationship.fieldNames![1] &&
+                typeof object[relationship.aliases![1]] !== 'undefined'
+            ) {
             }
         }
     }

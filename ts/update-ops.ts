@@ -1,4 +1,4 @@
-import { UpdateOps } from "./types";
+import { UpdateOps } from './types'
 
 /**
  * Handles mutation of a document, updating each field in the way specified
@@ -7,7 +7,7 @@ import { UpdateOps } from "./types";
  *
  * TODO: Proper runtime error handling for badly formed update objs.
  */
-export function _processFieldUpdates(updates : any, object : any) {
+export function _processFieldUpdates(updates: any, object: any) {
     // TODO: Find a home for this
     // TODO: Support all update ops
     const updateOpAppliers: UpdateOps = {
@@ -30,8 +30,9 @@ export function _processFieldUpdates(updates : any, object : any) {
     for (const [updateKey, updateVal] of Object.entries(updates)) {
         // If supported update op, run assoc. update op applier
         if (updateOpAppliers[updateKey] != null) {
-            Object.entries(updateVal as any).forEach(([key, val] : [any, any]) =>
-                updateOpAppliers[updateKey](object, key, val))
+            Object.entries(updateVal as any).forEach(([key, val]: [any, any]) =>
+                updateOpAppliers[updateKey](object, key, val),
+            )
         } else {
             object[updateKey] = updateVal
         }
