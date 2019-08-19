@@ -5,7 +5,7 @@ import { getDexieHistory } from './schema'
 import { FieldTypeRegistry } from '@worldbrain/storex/lib/fields';
 
 describe('Dexie schema generation', () => {
-    it('it should work', () => {
+    it('it should work', async () => {
         const storageRegisty = new StorageRegisty({ fieldTypes: new FieldTypeRegistry() })
         storageRegisty.registerCollection('spam', {
             version: new Date(2018, 5, 20),
@@ -84,6 +84,7 @@ describe('Dexie schema generation', () => {
             ],
         })
 
+        await storageRegisty.finishInitialization()
         const dexieSchemas = getDexieHistory(storageRegisty)
 
         expect(dexieSchemas[0]).toEqual({
@@ -149,5 +150,103 @@ describe('Dexie schema generation', () => {
             },
             // migrations: [],
         })
+    })
+
+    it('should correctly index (single)ChildOf relationship fields', async () => {
+        const storageRegisty = new StorageRegisty({})
+        storageRegisty.registerCollections({
+            user: {
+                version: new Date(1),
+                fields: {
+                    displayName: { type: 'string' }
+                }
+            },
+            profile: {
+                version: new Date(1),
+                fields: {
+                    food: { type: 'string' }
+                },
+                relationships: [
+                    { alias: 'theUser', singleChildOf: 'user', fieldName: 'user_id' }
+                ],
+                indices: [
+                    { field: { relationship: 'theUser' } }
+                ]
+            },
+            email: {
+                version: new Date(1),
+                fields: {
+                    address: { type: 'string' }
+                },
+                relationships: [
+                    { alias: 'theUser', childOf: 'user', fieldName: 'user_id' }
+                ],
+                indices: [
+                    { field: { relationship: 'theUser' } }
+                ]
+            }
+        })
+        await storageRegisty.finishInitialization()
+
+        await storageRegisty.finishInitialization()
+        const dexieSchemas = getDexieHistory(storageRegisty)
+        
+        expect(dexieSchemas).toEqual([{
+            version: 1,
+            schema: {
+                user: '++id',
+                profile: '++id, user_id',
+                email: '++id, user_id'
+            },
+        }])
+    })
+    
+    it('should correctly index compound indices involving (single)ChildOf relationship fields', async () => {
+        const storageRegisty = new StorageRegisty({})
+        storageRegisty.registerCollections({
+            user: {
+                version: new Date(1),
+                fields: {
+                    displayName: { type: 'string' }
+                }
+            },
+            profile: {
+                version: new Date(1),
+                fields: {
+                    food: { type: 'string' }
+                },
+                relationships: [
+                    { alias: 'theUser', singleChildOf: 'user', fieldName: 'user_id' }
+                ],
+                indices: [
+                    { field: [ { relationship: 'theUser' }, 'food' ] }
+                ]
+            },
+            email: {
+                version: new Date(1),
+                fields: {
+                    address: { type: 'string' }
+                },
+                relationships: [
+                    { alias: 'theUser', childOf: 'user', fieldName: 'user_id' }
+                ],
+                indices: [
+                    { field: [ { relationship: 'theUser' }, 'address' ] }
+                ]
+            }
+        })
+        await storageRegisty.finishInitialization()
+
+        await storageRegisty.finishInitialization()
+        const dexieSchemas = getDexieHistory(storageRegisty)
+        
+        expect(dexieSchemas).toEqual([{
+            version: 1,
+            schema: {
+                user: '++id',
+                profile: '++id, [user_id+food]',
+                email: '++id, [user_id+address]'
+            },
+        }])
     })
 })
