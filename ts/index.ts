@@ -193,6 +193,20 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     async cleanup(): Promise<any> {}
 
+    async rawCreateObjects(
+        collection: string,
+        objects: any[],
+        options: backend.CreateManyOptions,
+    ): Promise<backend.CreateManyResult> {
+        if (options.withNestedObjects) {
+            throw Error(
+                'rawCreateObjects must be called withNestedObjects equal to false. (nested and complex Objects are not supported in these low level bulk creations)',
+            )
+        }
+        await this.dexie.table(collection).bulkPut(objects)
+        return { objects }
+    }
+
     async createObject(
         collection: string,
         object: any,
