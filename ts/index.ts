@@ -297,7 +297,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
     async deleteObjects(collection: string, query: any, options: backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
         const { collectionDefinition } = this._prepareOperation({ operationName: 'deleteObjects', collection })
 
-        this.whereObjectCleaner(query, {
+        await this.whereObjectCleaner(query, {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
         })
