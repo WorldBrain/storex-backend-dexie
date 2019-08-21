@@ -225,8 +225,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
             .equalsIgnoreCase(value)
     }
 
-
-    async findObjects<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
+    async _rawFindObjects<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
         const { collectionDefinition } = this._prepareOperation({ operationName: 'findObjects', collection })
 
         const order = findOpts.order && findOpts.order.length ? findOpts.order[0] : null
@@ -261,6 +260,13 @@ export class DexieStorageBackend extends backend.StorageBackend {
             results = await coll.toArray()
         }
 
+        return results
+    }
+
+    async findObjects<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
+        const { collectionDefinition } = this._prepareOperation({ operationName: 'findObjects', collection })
+        const results = await this._rawFindObjects<T>(collection, query, findOpts)
+
         await Promise.all(results.map(async object => {
             await this.readObjectCleaner(object, {
                 collectionDefinition,
@@ -278,8 +284,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
         })
-
-        const objects = await this.findObjects(collection, where, options)
+        
+        const objects = await this._rawFindObjects(collection, where, options)
 
         for (const object of objects) {
             _processFieldUpdates(updates, object)
