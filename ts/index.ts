@@ -42,6 +42,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         fullTextSearch: true,
         executeBatch: true,
         transaction: true,
+        customFields: true,
     }
 
     private dbName: string
