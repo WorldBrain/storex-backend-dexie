@@ -44,11 +44,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
         transaction: true,
     }
 
-    private dbName : string
-    private idbImplementation : IndexedDbImplementation
-    private dexie! : DexieMongoify
-    private stemmerSelector : StemmerSelector
-    private schemaPatcher : SchemaPatcher
+    private dbName: string
+    private idbImplementation: IndexedDbImplementation
+    private dexie!: DexieMongoify
+    private stemmerSelector: StemmerSelector
+    private schemaPatcher: SchemaPatcher
     private initialized = false
     private readObjectCleaner = makeCleanerChain([
         _cleanFieldAliasesForReads,
@@ -60,7 +60,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         _cleanFieldAliasesForWrites,
     ])
     private updateObjectCleaner = makeCleanerChain([
-        _makeCustomFieldCleaner({ purpose: 'create' }),
+        _makeCustomFieldCleaner({ purpose: 'update' }),
         _cleanFullTextIndexFieldsForWrite,
         _cleanFieldAliasesForWrites,
     ])
@@ -148,7 +148,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }) as DexieMongoify
 
         // DexieMongofiy binds the .collection to the last DB created, creating confusing situations when using multiple DBs at the same time
-        Dexie.prototype['collection'] = function collection(collectionName : string) {
+        Dexie.prototype['collection'] = function collection(collectionName: string) {
             return this.table(collectionName);
         }
 
@@ -169,20 +169,20 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
     }
 
-    async createObject(collection: string, object : any, options: backend.CreateSingleOptions = {}): Promise<backend.CreateSingleResult> {
-        return this._complexCreateObject(collection, object, {...options, needsRawCreates: false})
+    async createObject(collection: string, object: any, options: backend.CreateSingleOptions = {}): Promise<backend.CreateSingleResult> {
+        return this._complexCreateObject(collection, object, { ...options, needsRawCreates: false })
     }
 
-    async _complexCreateObject(collection: string, object : any, options: backend.CreateSingleOptions & {needsRawCreates : boolean}) {
-        const dissection = dissectCreateObjectOperation({operation: 'createObject', collection, args: object}, this.registry)
+    async _complexCreateObject(collection: string, object: any, options: backend.CreateSingleOptions & { needsRawCreates: boolean }) {
+        const dissection = dissectCreateObjectOperation({ operation: 'createObject', collection, args: object }, this.registry)
         const batchToExecute = convertCreateObjectDissectionToBatch(dissection)
-        const batchResult = await this._rawExecuteBatch(batchToExecute, {needsRawCreates: true})
+        const batchResult = await this._rawExecuteBatch(batchToExecute, { needsRawCreates: true })
         this._reconstructCreatedObject(object, collection, dissection, batchResult.info)
 
         return { object }
     }
 
-    async _reconstructCreatedObject(object : any, collection : string, operationDissection : CreateObjectDissection, batchResultInfo : any) {
+    async _reconstructCreatedObject(object: any, collection: string, operationDissection: CreateObjectDissection, batchResultInfo: any) {
         for (const step of operationDissection.objects) {
             const collectionDefiniton = this.registry.collections[collection]
             const pkIndex = collectionDefiniton.pkIndex
@@ -190,11 +190,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async _rawCreateObject(collection: string, object : any, options: backend.CreateSingleOptions = {}) {
+    async _rawCreateObject(collection: string, object: any, options: backend.CreateSingleOptions = {}) {
         const { collectionDefinition } = this._prepareOperation({ operationName: 'createObject', collection })
-        
+
         await this.createObjectCleaner(object, {
-            collectionDefinition, 
+            collectionDefinition,
             stemmerSelector: this.stemmerSelector,
         })
         await this.dexie.table(collection).put(object)
@@ -203,7 +203,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     // TODO: Afford full find support for ignoreCase opt; currently just uses the first filter entry
-    private _findIgnoreCase<T>(collection: string, query : any, findOpts: backend.FindManyOptions = {}) {
+    private _findIgnoreCase<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}) {
         // Grab first entry from the filter query; ignore rest for now
         const [[indexName, value], ...fields] = Object.entries<string>(query)
 
@@ -226,9 +226,9 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
 
-    async findObjects<T>(collection : string, query : any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
+    async findObjects<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
         const { collectionDefinition } = this._prepareOperation({ operationName: 'findObjects', collection })
-        
+
         const order = findOpts.order && findOpts.order.length ? findOpts.order[0] : null
         if (order && findOpts.order!.length > 1) {
             throw new Error('Sorting on multiple fields is not supported')
@@ -260,20 +260,20 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
             results = await coll.toArray()
         }
-        
+
         await Promise.all(results.map(async object => {
             await this.readObjectCleaner(object, {
                 collectionDefinition,
                 stemmerSelector: this.stemmerSelector,
             })
         }))
-        
+
         return results
     }
 
-    async updateObjects(collection: string, where : any, updates : any, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
+    async updateObjects(collection: string, where: any, updates: any, options: backend.UpdateManyOptions = {}): Promise<backend.UpdateManyResult> {
         const { collectionDefinition } = this._prepareOperation({ operationName: 'updateObjects', collection })
-        
+
         await this.updateObjectCleaner(updates, {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
@@ -287,9 +287,9 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async deleteObjects(collection : string, query : any, options : backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
+    async deleteObjects(collection: string, query: any, options: backend.DeleteManyOptions = {}): Promise<backend.DeleteManyResult> {
         const { collectionDefinition } = this._prepareOperation({ operationName: 'deleteObjects', collection })
-        
+
         this.whereObjectCleaner(query, {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
@@ -302,11 +302,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
         // return deletedCount
     }
 
-    async countObjects(collection: string, query : any) {
+    async countObjects(collection: string, query: any) {
         return this.dexie.collection(collection).count(query)
     }
 
-    async executeBatch(batch : backend.OperationBatch) {
+    async executeBatch(batch: backend.OperationBatch) {
         if (!batch.length) {
             return { info: {} }
         }
@@ -314,16 +314,18 @@ export class DexieStorageBackend extends backend.StorageBackend {
         const collections = Array.from(new Set(_flattenBatch(batch, this.registry).map(operation => operation.collection)))
         let info = null
         await this.transaction({ collections }, async () => {
-            info = (await this._rawExecuteBatch(batch, {needsRawCreates: false})).info
+            info = (await this._rawExecuteBatch(batch, { needsRawCreates: false })).info
         })
         return { info }
     }
 
-    async transaction(options : { collections: string[] }, body : Function) {
+    async transaction(options: { collections: string[] }, body: Function) {
         const executeBody = async () => {
-            return body({ transactionOperation: (name : string, ...args : any[]) => {
-                return this.operation(name, ...args)
-            } })
+            return body({
+                transactionOperation: (name: string, ...args: any[]) => {
+                    return this.operation(name, ...args)
+                }
+            })
         }
 
         if (typeof navigator !== 'undefined') {
@@ -335,8 +337,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     async _rawExecuteBatch(
-        batch : backend.OperationBatch,
-        options : {needsRawCreates : boolean}
+        batch: backend.OperationBatch,
+        options: { needsRawCreates: boolean }
     ) {
         const info = {}
         const placeholders = {}
@@ -348,10 +350,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
                 const { object } = options.needsRawCreates
                     ? await this._rawCreateObject(operation.collection, operation.args)
-                    : await this._complexCreateObject(operation.collection, operation.args, {needsRawCreates: true})
+                    : await this._complexCreateObject(operation.collection, operation.args, { needsRawCreates: true })
 
                 if (operation.placeholder) {
-                    info[operation.placeholder] = {object}
+                    info[operation.placeholder] = { object }
                     placeholders[operation.placeholder] = object
                 }
             } else if (operation.operation === 'updateObjects') {
@@ -363,7 +365,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return { info }
     }
 
-    async operation(name : string, ...args : any[]) {
+    async operation(name: string, ...args: any[]) {
         if (!this.initialized) {
             throw new Error('Tried to use Dexie backend without calling StorageManager.finishInitialization() first')
         }
@@ -371,7 +373,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return await super.operation(name, ...args)
     }
 
-    _prepareOperation(options : { operationName : string, collection : string }) : { collectionDefinition : CollectionDefinition } {
+    _prepareOperation(options: { operationName: string, collection: string }): { collectionDefinition: CollectionDefinition } {
         const collectionDefinition = this.registry.collections[options.collection]
         if (!collectionDefinition) {
             throw new Error(`Tried to do '${options.operationName}' operation on non-existing collection: ${options.collection}`)
