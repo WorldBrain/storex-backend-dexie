@@ -56,6 +56,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         fullTextSearch: true,
         executeBatch: true,
         transaction: true,
+        customFields: true,
     }
 
     private dbName: string
@@ -74,7 +75,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         _cleanFieldAliasesForWrites,
     ])
     private updateObjectCleaner = makeCleanerChain([
-        _makeCustomFieldCleaner({ purpose: 'create' }),
+        _makeCustomFieldCleaner({ purpose: 'update' }),
         _cleanFullTextIndexFieldsForWrite,
         _cleanFieldAliasesForWrites,
     ])
@@ -282,6 +283,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         query: any,
         findOpts: backend.FindManyOptions = {},
     ) {
+    private _findIgnoreCase<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}) {
         // Grab first entry from the filter query; ignore rest for now
         const [[indexName, value], ...fields] = Object.entries<string>(query)
 
@@ -380,8 +382,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
         })
-
-        const objects = await this.findObjects(collection, where, options)
+        
+        const objects = await this._rawFindObjects(collection, where, options)
 
         for (const object of objects) {
             _processFieldUpdates(updates, object)
@@ -478,7 +480,6 @@ export class DexieStorageBackend extends backend.StorageBackend {
                           operation.args,
                           { needsRawCreates: true },
                       )
-
                 if (operation.placeholder) {
                     info[operation.placeholder] = { object }
                     placeholders[operation.placeholder] = object
