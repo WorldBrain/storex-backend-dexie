@@ -371,20 +371,6 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return results
     }
 
-    async findObjects<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
-        const { collectionDefinition } = this._prepareOperation({ operationName: 'findObjects', collection })
-        const results = await this._rawFindObjects<T>(collection, query, findOpts)
-
-        await Promise.all(results.map(async object => {
-            await this.readObjectCleaner(object, {
-                collectionDefinition,
-                stemmerSelector: this.stemmerSelector,
-            })
-        }))
-
-        return results
-    }
-
     async updateObjects(
         collection: string,
         where: any,
@@ -419,11 +405,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
             collection,
         })
 
-        this.whereObjectCleaner(query, {
+        await this.whereObjectCleaner(query, {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
         })
-
+        
         const { deletedCount } = await this.dexie
             .collection(collection)
             .remove(query)
