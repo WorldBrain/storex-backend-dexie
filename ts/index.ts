@@ -54,6 +54,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         count: true,
         createWithRelationships: true,
         fullTextSearch: true,
+        rawCreateObjects: true,
         executeBatch: true,
         transaction: true,
         customFields: true,
