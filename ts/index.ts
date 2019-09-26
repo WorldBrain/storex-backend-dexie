@@ -387,7 +387,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
         })
-        
+
         const objects = await this._rawFindObjects(collection, where, options)
 
         for (const object of objects) {
