@@ -1,5 +1,9 @@
 import { getTermsIndex } from './schema'
-import { ObjectCleaner, ObjectCleanerOptions } from './types'
+import {
+    ObjectCleaner,
+    ObjectCleanerOptions,
+    ObjectCleanerPurpose,
+} from './types'
 import {
     isChildOfRelationship,
     isConnectsRelationship,
@@ -18,10 +22,11 @@ export function makeCleanerChain(cleaners: ObjectCleaner[]): ObjectCleaner {
  * Handles mutation of a document to be inserted/updated to storage,
  * depending on needed pre-processing for a given indexed field.
  */
-export const _cleanFullTextIndexFieldsForWrite: ObjectCleaner = async (
-    object: any,
-    options: ObjectCleanerOptions,
-) => {
+export const _cleanFullTextIndexFieldsForWrite = ({
+    purpose,
+}: {
+    purpose: ObjectCleanerPurpose
+}): ObjectCleaner => async (object: any, options: ObjectCleanerOptions) => {
     for (const [fieldName, fieldDef] of Object.entries(
         options.collectionDefinition.fields,
     )) {
@@ -57,6 +62,16 @@ export const _cleanFullTextIndexFieldsForWrite: ObjectCleaner = async (
                 ]
                 const fullTextField =
                     indexDef.fullTextIndexName || getTermsIndex(fieldName)
+
+                // If we're doing an update that also touches the associated full-text field,
+                //  don't overwrite the update's value by re-deriving the `text` field
+                if (
+                    purpose === 'update' &&
+                    Object.keys(object).includes(fullTextField)
+                ) {
+                    return
+                }
+
                 object[fullTextField] = [...stemmer(fieldValue)]
                 break
             default:
@@ -65,7 +80,7 @@ export const _cleanFullTextIndexFieldsForWrite: ObjectCleaner = async (
 }
 
 export function _makeCustomFieldCleaner(options: {
-    purpose: 'query-where' | 'create' | 'update' | 'read'
+    purpose: ObjectCleanerPurpose
 }): ObjectCleaner {
     const purpose = options.purpose
     const direction = purpose === 'read' ? 'from-storage' : 'to-storage'

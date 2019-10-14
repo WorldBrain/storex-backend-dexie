@@ -44,6 +44,7 @@ export interface UpdateOps {
     $sort: UpdateOpApplier
 }
 
+export type ObjectCleanerPurpose = 'query-where' | 'create' | 'update' | 'read'
 export type ObjectCleaner = (
     object: any,
     options: ObjectCleanerOptions,
