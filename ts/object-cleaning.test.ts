@@ -14,8 +14,9 @@ function setupTest() {
         collectionDefinition: {
             version: new Date(),
             fields: {
-                text: { type: 'text' },
+                text: { type: 'text', _index: 0 },
             },
+            indices: [{field: 'text'}]
         },
     }
 
