@@ -72,12 +72,12 @@ export class DexieStorageBackend extends backend.StorageBackend {
     ])
     private createObjectCleaner = makeCleanerChain([
         _makeCustomFieldCleaner({ purpose: 'create' }),
-        _cleanFullTextIndexFieldsForWrite,
+        _cleanFullTextIndexFieldsForWrite({ purpose: 'create' }),
         _cleanFieldAliasesForWrites,
     ])
     private updateObjectCleaner = makeCleanerChain([
         _makeCustomFieldCleaner({ purpose: 'update' }),
-        _cleanFullTextIndexFieldsForWrite,
+        _cleanFullTextIndexFieldsForWrite({ purpose: 'update' }),
         _cleanFieldAliasesForWrites,
     ])
     private whereObjectCleaner = makeCleanerChain([
