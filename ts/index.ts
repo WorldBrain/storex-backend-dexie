@@ -58,6 +58,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         executeBatch: true,
         transaction: true,
         customFields: true,
+        streamObjects: true,
     }
 
     private dbName: string
@@ -192,7 +193,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async cleanup(): Promise<any> {}
+    async cleanup(): Promise<any> { }
 
     async rawCreateObjects(
         collection: string,
@@ -296,7 +297,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         if (findOpts.ignoreCase && findOpts.ignoreCase[0] !== indexName) {
             throw new InvalidOptionsError(
                 `Specified ignoreCase field '${
-                    findOpts.ignoreCase[0]
+                findOpts.ignoreCase[0]
                 }' is not in filter query.`,
             )
         }
@@ -372,6 +373,31 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return results
     }
 
+    async* streamObjects<T>(collection: string) {
+        const table = this.dexie.table<T>(collection)
+        // for (const pk of await table.toCollection().primaryKeys()) {
+        //     yield await table.get(pk)
+        // }
+
+        const chunkSize = 1000
+        let chunk = 0
+
+        let pks: any[]
+        do {
+            pks = await table
+                .toCollection()
+                .offset(chunk * chunkSize)
+                .limit(chunkSize)
+                .primaryKeys()
+
+            for (const pk of pks) {
+                yield await table.get(pk)
+            }
+
+            chunk++ // Ensure next iteration goes to next chunk
+        } while (pks.length === chunkSize) // While data not exhausted
+    }
+
     async updateObjects(
         collection: string,
         where: any,
@@ -410,7 +436,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
             collectionDefinition,
             stemmerSelector: this.stemmerSelector,
         })
-        
+
         const { deletedCount } = await this.dexie
             .collection(collection)
             .remove(query)
@@ -477,14 +503,14 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
                 const { object } = options.needsRawCreates
                     ? await this._rawCreateObject(
-                          operation.collection,
-                          operation.args,
-                      )
+                        operation.collection,
+                        operation.args,
+                    )
                     : await this._complexCreateObject(
-                          operation.collection,
-                          operation.args,
-                          { needsRawCreates: true },
-                      )
+                        operation.collection,
+                        operation.args,
+                        { needsRawCreates: true },
+                    )
 
                 if (operation.placeholder) {
                     info[operation.placeholder] = { object }
@@ -526,7 +552,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         if (!collectionDefinition) {
             throw new Error(
                 `Tried to do '${
-                    options.operationName
+                options.operationName
                 }' operation on non-existing collection: ${options.collection}`,
             )
         }
