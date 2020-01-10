@@ -169,7 +169,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         this.dexie = new Dexie(this.dbName, {
             indexedDB: this.idbImplementation.factory,
             IDBKeyRange: this.idbImplementation.range,
-        }) as DexieMongoify
+        } as any) as DexieMongoify
 
         // DexieMongofiy binds the .collection to the last DB created, creating confusing situations when using multiple DBs at the same time
         Dexie.prototype['collection'] = function collection(
