@@ -180,7 +180,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         const dexieHistory = getDexieHistory(this.registry)
 
-        for (const { version, schema } of this.schemaPatcher(dexieHistory)) {
+        for (const { dexieSchemaVersion: version, schema } of this.schemaPatcher(dexieHistory)) {
             this.dexie.version(version).stores(schema)
         }
     }

@@ -14,7 +14,8 @@ export interface DexieMongoify extends Dexie {
 }
 
 export interface DexieSchema {
-    version: number
+    dexieSchemaVersion: number
+    storexSchemaVersion: Date
     // migrations: MigrationRunner[]
     schema: {
         [collName: string]: string

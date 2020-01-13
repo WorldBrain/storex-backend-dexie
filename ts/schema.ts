@@ -9,11 +9,12 @@ export function getDexieHistory(storageRegistry: StorageRegistry) {
     const versions: DexieSchema[] = []
     let dexieVersion = 0
 
-    for (const { collections: versionCollections } of storageRegistry.getSchemaHistory()) {
+    for (const { collections: versionCollections, version: storexSchemaVersion } of storageRegistry.getSchemaHistory()) {
         Object.assign(collections, versionCollections)
         versions.push({
             ...getDexieSchema(collections),
-            version: ++dexieVersion,
+            dexieSchemaVersion: ++dexieVersion,
+            storexSchemaVersion,
         })
     }
 

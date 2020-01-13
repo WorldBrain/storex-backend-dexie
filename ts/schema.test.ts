@@ -89,69 +89,72 @@ describe('Dexie schema generation', () => {
         await storageRegisty.finishInitialization()
         const dexieSchemas = getDexieHistory(storageRegisty)
 
-        expect(dexieSchemas[0]).toEqual({
-            version: 1,
-            schema: {
-                eggs: 'slug',
-                spam: 'slug',
+        expect(dexieSchemas).toEqual([
+            {
+                dexieSchemaVersion: 1,
+                storexSchemaVersion: new Date(2018, 5, 20),
+                schema: {
+                    eggs: 'slug',
+                    spam: 'slug',
+                },
+                // migrations: [],
             },
-            // migrations: [],
-        })
-
-        expect(dexieSchemas[1]).toEqual({
-            version: 2,
-            schema: {
-                eggs: 'slug, *_field2_terms',
-                spam: 'slug',
+            {
+                dexieSchemaVersion: 2,
+                storexSchemaVersion: new Date(2018, 5, 25),
+                schema: {
+                    eggs: 'slug, *_field2_terms',
+                    spam: 'slug',
+                },
+                // migrations: [migrateEggs],
             },
-            // migrations: [migrateEggs],
-        })
-
-        expect(dexieSchemas[2]).toEqual({
-            version: 3,
-            schema: {
-                eggs: 'slug, *_field2_terms',
-                foo: 'slug',
-                spam: 'slug',
+            {
+                dexieSchemaVersion: 3,
+                storexSchemaVersion: new Date(2018, 5, 28),
+                schema: {
+                    eggs: 'slug, *_field2_terms',
+                    foo: 'slug',
+                    spam: 'slug',
+                },
+                // migrations: [],
             },
-            // migrations: [],
-        })
-
-        expect(dexieSchemas[3]).toEqual({
-            version: 4,
-            schema: {
-                eggs: 'slug, *_field2_terms',
-                foo: 'slug',
-                spam: 'slug',
-                ham: '[nameLast+nameFirst], nameLast',
+            {
+                dexieSchemaVersion: 4,
+                storexSchemaVersion: new Date(2018, 6, 20),
+                schema: {
+                    eggs: 'slug, *_field2_terms',
+                    foo: 'slug',
+                    spam: 'slug',
+                    ham: '[nameLast+nameFirst], nameLast',
+                },
+                // migrations: [],
             },
-            // migrations: [],
-        })
-
-        expect(dexieSchemas[4]).toEqual({
-            version: 5,
-            schema: {
-                eggs: 'slug, *_field2_terms',
-                foo: 'slug',
-                spam: 'slug',
-                ham: '[nameLast+nameFirst], nameLast',
-                people: '++id, &ssn',
+            {
+                dexieSchemaVersion: 5,
+                storexSchemaVersion: new Date(2018, 6, 23),
+                schema: {
+                    eggs: 'slug, *_field2_terms',
+                    foo: 'slug',
+                    spam: 'slug',
+                    ham: '[nameLast+nameFirst], nameLast',
+                    people: '++id, &ssn',
+                },
+                // migrations: [],
             },
-            // migrations: [],
-        })
-
-        expect(dexieSchemas[5]).toEqual({
-            version: 6,
-            schema: {
-                eggs: 'slug, *_field2_terms',
-                foo: 'slug',
-                spam: 'slug',
-                ham: '[nameLast+nameFirst], nameLast',
-                people: '++id, &ssn',
-                dogs: 'id, *biographyTerms',
-            },
-            // migrations: [],
-        })
+            {
+                dexieSchemaVersion: 6,
+                storexSchemaVersion: new Date(2018, 6, 26),
+                schema: {
+                    eggs: 'slug, *_field2_terms',
+                    foo: 'slug',
+                    spam: 'slug',
+                    ham: '[nameLast+nameFirst], nameLast',
+                    people: '++id, &ssn',
+                    dogs: 'id, *biographyTerms',
+                },
+                // migrations: [],
+            }
+        ])
     })
 
     it('should correctly index (single)ChildOf relationship fields', async () => {
@@ -194,7 +197,8 @@ describe('Dexie schema generation', () => {
         const dexieSchemas = getDexieHistory(storageRegisty)
 
         expect(dexieSchemas).toEqual([{
-            version: 1,
+            dexieSchemaVersion: 1,
+            storexSchemaVersion: new Date(1),
             schema: {
                 user: '++id',
                 profile: '++id, user_id',
@@ -221,7 +225,7 @@ describe('Dexie schema generation', () => {
                     { alias: 'theUser', singleChildOf: 'user', fieldName: 'user_id' }
                 ],
                 indices: [
-                    { field: [ { relationship: 'theUser' }, 'food' ] }
+                    { field: [{ relationship: 'theUser' }, 'food'] }
                 ]
             },
             email: {
@@ -233,7 +237,7 @@ describe('Dexie schema generation', () => {
                     { alias: 'theUser', childOf: 'user', fieldName: 'user_id' }
                 ],
                 indices: [
-                    { field: [ { relationship: 'theUser' }, 'address' ] }
+                    { field: [{ relationship: 'theUser' }, 'address'] }
                 ]
             }
         })
@@ -243,7 +247,8 @@ describe('Dexie schema generation', () => {
         const dexieSchemas = getDexieHistory(storageRegisty)
 
         expect(dexieSchemas).toEqual([{
-            version: 1,
+            dexieSchemaVersion: 1,
+            storexSchemaVersion: new Date(1),
             schema: {
                 user: '++id',
                 profile: '++id, [user_id+food]',
