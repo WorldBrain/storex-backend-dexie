@@ -17,7 +17,7 @@ import {
     UnimplementedError,
     InvalidOptionsError,
 } from '@worldbrain/storex/lib/types/errors'
-import { _flattenBatch } from './utils'
+import { _flattenBatch, normalizeOptionalFields } from './utils'
 import { StemmerSelector, Stemmer, SchemaPatcher } from './types'
 import { _processFieldUpdates } from './update-ops'
 import {
@@ -47,6 +47,7 @@ export interface DexieStorageBackendOptions {
      * function by default.
      **/
     schemaPatcher?: SchemaPatcher
+    legacyMemexCompatibility?: boolean // temporary option that prevents normalisation of optional fields
 }
 
 export class DexieStorageBackend extends backend.StorageBackend {
@@ -65,6 +66,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
     private idbImplementation: IndexedDbImplementation
     private dexie!: DexieMongoify
     private stemmerSelector: StemmerSelector
+    private hasStemmer: boolean
+    private hasCustomStemmerSelector: boolean
     private schemaPatcher: SchemaPatcher
     private initialized = false
     private readObjectCleaner = makeCleanerChain([
@@ -86,34 +89,30 @@ export class DexieStorageBackend extends backend.StorageBackend {
         _cleanFieldAliasesForWrites,
     ])
 
-    constructor({
-        dbName,
-        idbImplementation = undefined,
-        stemmer = undefined,
-        stemmerSelector = undefined,
-        schemaPatcher = IdentitySchemaPatcher,
-    }: DexieStorageBackendOptions) {
+    constructor(private options: DexieStorageBackendOptions) {
         super()
 
-        if (!stemmerSelector) {
-            if (stemmer) {
-                stemmerSelector = () => stemmer
+        this.hasStemmer = !!(options.stemmer || options.stemmerSelector)
+        this.hasCustomStemmerSelector = !!options.stemmerSelector
+        if (!options.stemmerSelector) {
+            if (options.stemmer) {
+                options.stemmerSelector = () => options.stemmer!
             } else {
-                stemmerSelector = () => null
+                options.stemmerSelector = () => null
             }
-        } else if (stemmer) {
+        } else if (options.stemmer) {
             throw new Error(
                 `You cannot pass both a 'stemmer' and a 'stemmerSelector' into DexieStorageBackend`,
             )
         }
 
-        this.dbName = dbName
-        this.idbImplementation = idbImplementation || {
+        this.dbName = options.dbName
+        this.idbImplementation = options.idbImplementation || {
             factory: window.indexedDB,
             range: window['IDBKeyRange'],
         }
-        this.stemmerSelector = stemmerSelector
-        this.schemaPatcher = schemaPatcher
+        this.stemmerSelector = options.stemmerSelector
+        this.schemaPatcher = options.schemaPatcher || IdentitySchemaPatcher
     }
 
     get dexieInstance() {
@@ -143,7 +142,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     _validateRegistry() {
-        if (this.stemmerSelector) {
+        if (!this.hasStemmer || this.hasCustomStemmerSelector) {
             return
         }
 
@@ -180,7 +179,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         const dexieHistory = getDexieHistory(this.registry)
 
-        for (const { dexieSchemaVersion: version, schema } of this.schemaPatcher(dexieHistory)) {
+        for (const {
+            dexieSchemaVersion: version,
+            schema,
+        } of this.schemaPatcher(dexieHistory)) {
             this.dexie.version(version).stores(schema)
         }
     }
@@ -193,18 +195,19 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async cleanup(): Promise<any> { }
+    async cleanup(): Promise<any> {}
 
     async rawCreateObjects(
         collection: string,
         objects: any[],
         options: backend.CreateManyOptions,
     ): Promise<backend.CreateManyResult> {
-        if (options.withNestedObjects) {
+        if ((options?.withNestedObjects as boolean | undefined) === true) {
             throw Error(
                 'rawCreateObjects must be called withNestedObjects equal to false. (nested and complex Objects are not supported in these low level bulk creations)',
             )
         }
+
         await this.dexie.table(collection).bulkPut(objects)
         return { objects }
     }
@@ -225,6 +228,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
         object: any,
         options: backend.CreateSingleOptions & { needsRawCreates: boolean },
     ) {
+        const { collectionDefinition } = this._prepareOperation({
+            operationName: 'createObject',
+            collection,
+        })
+
         const dissection = dissectCreateObjectOperation(
             { operation: 'createObject', collection, args: object },
             this.registry,
@@ -239,6 +247,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
             dissection,
             batchResult.info,
         )
+
+        if (!this.options.legacyMemexCompatibility) {
+            normalizeOptionalFields(object, collectionDefinition)
+        }
 
         return { object }
     }
@@ -276,6 +288,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
         })
         await this.dexie.table(collection).put(object)
 
+        if (!this.options.legacyMemexCompatibility) {
+            normalizeOptionalFields(object, collectionDefinition)
+        }
+
         return { object }
     }
 
@@ -296,9 +312,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         if (findOpts.ignoreCase && findOpts.ignoreCase[0] !== indexName) {
             throw new InvalidOptionsError(
-                `Specified ignoreCase field '${
-                findOpts.ignoreCase[0]
-                }' is not in filter query.`,
+                `Specified ignoreCase field '${findOpts.ignoreCase[0]}' is not in filter query.`,
             )
         }
 
@@ -359,21 +373,37 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return results
     }
 
-    async findObjects<T>(collection: string, query: any, findOpts: backend.FindManyOptions = {}): Promise<Array<T>> {
-        const { collectionDefinition } = this._prepareOperation({ operationName: 'findObjects', collection })
-        const results = await this._rawFindObjects<T>(collection, query, findOpts)
+    async findObjects<T>(
+        collection: string,
+        query: any,
+        findOpts: backend.FindManyOptions = {},
+    ): Promise<Array<T>> {
+        const { collectionDefinition } = this._prepareOperation({
+            operationName: 'findObjects',
+            collection,
+        })
+        const results = await this._rawFindObjects<T>(
+            collection,
+            query,
+            findOpts,
+        )
 
-        await Promise.all(results.map(async object => {
-            await this.readObjectCleaner(object, {
-                collectionDefinition,
-                stemmerSelector: this.stemmerSelector,
-            })
-        }))
+        await Promise.all(
+            results.map(async object => {
+                if (!this.options.legacyMemexCompatibility) {
+                    normalizeOptionalFields(object, collectionDefinition)
+                }
+                await this.readObjectCleaner(object, {
+                    collectionDefinition,
+                    stemmerSelector: this.stemmerSelector,
+                })
+            }),
+        )
 
         return results
     }
 
-    async* streamObjects<T>(collection: string) {
+    async *streamObjects<T>(collection: string) {
         const table = this.dexie.table<T>(collection)
         // for (const pk of await table.toCollection().primaryKeys()) {
         //     yield await table.get(pk)
@@ -462,9 +492,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
         )
         let info = null
         await this.transaction({ collections }, async () => {
-            info = (await this._rawExecuteBatch(batch, {
-                needsRawCreates: false,
-            })).info
+            info = (
+                await this._rawExecuteBatch(batch, {
+                    needsRawCreates: false,
+                })
+            ).info
         })
         return { info }
     }
@@ -503,14 +535,14 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
                 const { object } = options.needsRawCreates
                     ? await this._rawCreateObject(
-                        operation.collection,
-                        operation.args,
-                    )
+                          operation.collection,
+                          operation.args,
+                      )
                     : await this._complexCreateObject(
-                        operation.collection,
-                        operation.args,
-                        { needsRawCreates: true },
-                    )
+                          operation.collection,
+                          operation.args,
+                          { needsRawCreates: true },
+                      )
 
                 if (operation.placeholder) {
                     info[operation.placeholder] = { object }
@@ -523,10 +555,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
                     operation.updates,
                 )
             } else if (operation.operation === 'deleteObjects') {
-                await this.deleteObjects(
-                    operation.collection,
-                    operation.where,
-                )
+                await this.deleteObjects(operation.collection, operation.where)
             }
         }
         return { info }
@@ -551,9 +580,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         ]
         if (!collectionDefinition) {
             throw new Error(
-                `Tried to do '${
-                options.operationName
-                }' operation on non-existing collection: ${options.collection}`,
+                `Tried to do '${options.operationName}' operation on non-existing collection: ${options.collection}`,
             )
         }
         return { collectionDefinition }

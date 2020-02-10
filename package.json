@@ -43,10 +43,10 @@
     "fake-indexeddb": "^2.0.4",
     "husky": "2.3.0",
     "mocha": "^4.0.1",
-    "prettier": "1.17.1",
-    "pretty-quick": "1.11.0",
+    "prettier": "^1.19.1",
+    "pretty-quick": "^2.0.1",
     "ts-node": "^7.0.1",
-    "typescript": "^3.0.1"
+    "typescript": "^3.7.5"
   },
   "peerDependencies": {
     "@worldbrain/storex": "^0.3.5"

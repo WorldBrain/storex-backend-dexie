@@ -1,4 +1,8 @@
-import { StorageRegistry, OperationBatch } from '@worldbrain/storex'
+import {
+    StorageRegistry,
+    OperationBatch,
+    CollectionDefinition,
+} from '@worldbrain/storex'
 import {
     dissectCreateObjectOperation,
     convertCreateObjectDissectionToBatch,
@@ -37,4 +41,20 @@ export function _flattenBatch(
         }
     }
     return generatedBatch
+}
+
+export function normalizeOptionalFields(
+    object: any,
+    collectionDefinition: CollectionDefinition,
+) {
+    for (const [fieldName, fieldDefinition] of Object.entries(
+        collectionDefinition.fields,
+    )) {
+        if (
+            fieldDefinition.optional &&
+            typeof object[fieldName] === 'undefined'
+        ) {
+            object[fieldName] = null
+        }
+    }
 }
