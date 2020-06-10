@@ -106,6 +106,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
             )
         }
 
+        this.persist()
+
         this.dbName = options.dbName
         this.idbImplementation = options.idbImplementation || {
             factory: window.indexedDB,
@@ -193,6 +195,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
                 "This backend doesn't support multiple databases directly",
             )
         }
+    }
+
+    async persist() {
+        return await navigator.storage && navigator.storage.persist &&
+            navigator.storage.persist();
     }
 
     async cleanup(): Promise<any> {}
