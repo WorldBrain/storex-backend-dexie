@@ -162,3 +162,18 @@ export const _cleanFieldAliasesForReads: ObjectCleaner = async (
         }
     }
 }
+
+export const _cleanTimestampFieldsForWrites: ObjectCleaner = async (
+    object,
+    options,
+) => {
+    for (const [fieldName, fieldDef] of Object.entries(
+        options.collectionDefinition.fields,
+    )) {
+        if (fieldDef.type === 'timestamp') {
+            if (object[fieldName] === '$now') {
+                object[fieldName] = Date.now()
+            }
+        }
+    }
+}

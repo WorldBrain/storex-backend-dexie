@@ -26,6 +26,7 @@ import {
     _cleanFullTextIndexFieldsForWrite,
     _cleanFieldAliasesForWrites,
     _cleanFieldAliasesForReads,
+    _cleanTimestampFieldsForWrites,
 } from './object-cleaning'
 export { Stemmer, StemmerSelector, SchemaPatcher } from './types'
 
@@ -78,11 +79,13 @@ export class DexieStorageBackend extends backend.StorageBackend {
         _makeCustomFieldCleaner({ purpose: 'create' }),
         _cleanFullTextIndexFieldsForWrite({ purpose: 'create' }),
         _cleanFieldAliasesForWrites,
+        _cleanTimestampFieldsForWrites,
     ])
     private updateObjectCleaner = makeCleanerChain([
         _makeCustomFieldCleaner({ purpose: 'update' }),
         _cleanFullTextIndexFieldsForWrite({ purpose: 'update' }),
         _cleanFieldAliasesForWrites,
+        _cleanTimestampFieldsForWrites,
     ])
     private whereObjectCleaner = makeCleanerChain([
         _makeCustomFieldCleaner({ purpose: 'query-where' }),
