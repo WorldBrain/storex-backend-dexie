@@ -181,7 +181,6 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
 
         const dexieHistory = getDexieHistory(this.registry)
-
         for (const {
             dexieSchemaVersion: version,
             schema,
