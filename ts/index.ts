@@ -28,7 +28,7 @@ import {
     _cleanFieldAliasesForReads,
     _cleanTimestampFieldsForWrites,
 } from './object-cleaning'
-export { Stemmer, StemmerSelector, SchemaPatcher } from './types'
+export type { Stemmer, StemmerSelector, SchemaPatcher } from './types'
 
 export interface IndexedDbImplementation {
     factory: IDBFactory
@@ -197,7 +197,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async cleanup(): Promise<any> {}
+    async cleanup(): Promise<any> { }
 
     async rawCreateObjects(
         collection: string,
@@ -537,14 +537,14 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
                 const { object } = options.needsRawCreates
                     ? await this._rawCreateObject(
-                          operation.collection,
-                          operation.args,
-                      )
+                        operation.collection,
+                        operation.args,
+                    )
                     : await this._complexCreateObject(
-                          operation.collection,
-                          operation.args,
-                          { needsRawCreates: true },
-                      )
+                        operation.collection,
+                        operation.args,
+                        { needsRawCreates: true },
+                    )
 
                 if (operation.placeholder) {
                     info[operation.placeholder] = { object }
