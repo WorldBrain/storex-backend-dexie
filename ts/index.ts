@@ -35,13 +35,13 @@ export interface IndexedDbImplementation {
     range: new () => IDBKeyRange
 }
 
-const IdentitySchemaPatcher: SchemaPatcher = f => f
+const IdentitySchemaPatcher: SchemaPatcher = (f) => f
 
 export interface DexieStorageBackendOptions {
     dbName: string
     stemmer?: Stemmer
     stemmerSelector?: StemmerSelector
-    idbImplementation?: IndexedDbImplementation
+    idbImplementation: IndexedDbImplementation
     /**
      * An optional function to run the generated Dexie schemas through to
      * afford changing them independently of the storex registry. Identity
@@ -111,8 +111,8 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
         this.dbName = options.dbName
         this.idbImplementation = options.idbImplementation || {
-            factory: window.indexedDB,
-            range: window['IDBKeyRange'],
+            factory: (window ?? self).indexedDB,
+            range: (window ?? self)['IDBKeyRange'],
         }
         this.stemmerSelector = options.stemmerSelector
         this.schemaPatcher = options.schemaPatcher || IdentitySchemaPatcher
@@ -197,7 +197,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
     }
 
-    async cleanup(): Promise<any> { }
+    async cleanup(): Promise<any> {}
 
     async rawCreateObjects(
         collection: string,
@@ -391,7 +391,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         )
 
         await Promise.all(
-            results.map(async object => {
+            results.map(async (object) => {
                 if (!this.options.legacyMemexCompatibility) {
                     normalizeOptionalFields(object, collectionDefinition)
                 }
@@ -488,7 +488,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         const collections = Array.from(
             new Set(
                 _flattenBatch(batch, this.registry).map(
-                    operation => operation.collection,
+                    (operation) => operation.collection,
                 ),
             ),
         )
@@ -513,7 +513,7 @@ export class DexieStorageBackend extends backend.StorageBackend {
         }
 
         if (typeof navigator !== 'undefined') {
-            const tables = options.collections.map(collection =>
+            const tables = options.collections.map((collection) =>
                 this.dexie.table(collection),
             )
             return this.dexie.transaction('rw', tables, executeBody)
@@ -537,14 +537,14 @@ export class DexieStorageBackend extends backend.StorageBackend {
 
                 const { object } = options.needsRawCreates
                     ? await this._rawCreateObject(
-                        operation.collection,
-                        operation.args,
-                    )
+                          operation.collection,
+                          operation.args,
+                      )
                     : await this._complexCreateObject(
-                        operation.collection,
-                        operation.args,
-                        { needsRawCreates: true },
-                    )
+                          operation.collection,
+                          operation.args,
+                          { needsRawCreates: true },
+                      )
 
                 if (operation.placeholder) {
                     info[operation.placeholder] = { object }
