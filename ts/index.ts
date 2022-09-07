@@ -168,6 +168,10 @@ export class DexieStorageBackend extends backend.StorageBackend {
     }
 
     _initDexie = () => {
+        if (this.dexie != null) {
+            return
+        }
+
         this.dexie = new Dexie(this.dbName, {
             indexedDB: this.idbImplementation.factory,
             IDBKeyRange: this.idbImplementation.range,
