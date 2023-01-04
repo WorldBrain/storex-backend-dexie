@@ -121,13 +121,17 @@ function convertIndexToDexieExps({
 
             // Note that order of these statements matters
             let listPrefix = indexDef.unique ? '&' : ''
-            listPrefix =
-                indexDef.pk &&
-                (indexDef.autoInc ||
-                    fields[indexDef.field as string]?.type === 'auto-pk')
-                    ? '++'
-                    : listPrefix
-
+            if (
+                typeof indexDef.field !== 'string' &&
+                !('relationship' in indexDef.field)
+            ) {
+                listPrefix =
+                    indexDef.pk &&
+                    (indexDef.autoInc ||
+                        fields[indexDef.field as string]?.type === 'auto-pk')
+                        ? '++'
+                        : listPrefix
+            }
             return `${listPrefix}${fieldName}`
         })
         .join(', ')
