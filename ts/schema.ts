@@ -79,7 +79,7 @@ function convertIndexToDexieExps({
 
     return (indices ? [...indices] : [])
         .sort(({ pk }) => (pk ? -1 : 1)) // PK indexes always come first in Dexie
-        .map(indexDef => {
+        .map((indexDef) => {
             // Convert from StorageManager compound index to Dexie compound index
             // Note that all other `IndexDefinition` opts are ignored for compound indexes
             if (indexDef.field instanceof Array) {
@@ -121,10 +121,7 @@ function convertIndexToDexieExps({
 
             // Note that order of these statements matters
             let listPrefix = indexDef.unique ? '&' : ''
-            if (
-                typeof indexDef.field !== 'string' &&
-                !('relationship' in indexDef.field)
-            ) {
+            if (typeof indexDef.field === 'string') {
                 listPrefix =
                     indexDef.pk &&
                     (indexDef.autoInc ||
