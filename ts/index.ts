@@ -7,16 +7,16 @@ import {
     dissectCreateObjectOperation,
     convertCreateObjectDissectionToBatch,
     setIn,
-} from '@worldbrain/storex/lib/utils'
+} from '@worldbrain/storex/ts/utils'
 // import { CollectionDefinition } from 'storex/types'
-import * as backend from '@worldbrain/storex/lib/types/backend'
+import * as backend from '@worldbrain/storex/ts/types/backend'
 import { getDexieHistory } from './schema'
 import { DexieMongoify, DexieSchema } from './types'
-import { StorageBackendFeatureSupport } from '@worldbrain/storex/lib/types/backend-features'
+import { StorageBackendFeatureSupport } from '@worldbrain/storex/ts/types/backend-features'
 import {
     UnimplementedError,
     InvalidOptionsError,
-} from '@worldbrain/storex/lib/types/errors'
+} from '@worldbrain/storex/ts/types/errors'
 import { _flattenBatch, normalizeOptionalFields } from './utils'
 import { StemmerSelector, Stemmer, SchemaPatcher } from './types'
 import { _processFieldUpdates } from './update-ops'
@@ -577,13 +577,11 @@ export class DexieStorageBackend extends backend.StorageBackend {
         return await super.operation(name, ...args)
     }
 
-    _prepareOperation(options: {
-        operationName: string
-        collection: string
-    }): { collectionDefinition: CollectionDefinition } {
-        const collectionDefinition = this.registry.collections[
-            options.collection
-        ]
+    _prepareOperation(options: { operationName: string; collection: string }): {
+        collectionDefinition: CollectionDefinition
+    } {
+        const collectionDefinition =
+            this.registry.collections[options.collection]
         if (!collectionDefinition) {
             throw new Error(
                 `Tried to do '${options.operationName}' operation on non-existing collection: ${options.collection}`,

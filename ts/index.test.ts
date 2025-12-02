@@ -2,7 +2,7 @@ import * as expect from 'expect'
 import {
     testStorageBackend,
     testStorageBackendFullTextSearch,
-} from '@worldbrain/storex/lib/index.tests'
+} from '@worldbrain/storex/ts/index.tests'
 import extractTerms from '@worldbrain/memex-stemmer'
 import { DexieStorageBackend } from '.'
 import inMemory from './in-memory'

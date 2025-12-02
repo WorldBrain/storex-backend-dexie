@@ -1,8 +1,8 @@
 /* eslint-env jest */
 const expect = require('expect')
-import StorageRegisty from '@worldbrain/storex/lib/registry'
+import StorageRegisty from '@worldbrain/storex/ts/registry'
 import { getDexieHistory } from './schema'
-import { FieldTypeRegistry } from '@worldbrain/storex/lib/fields'
+import { FieldTypeRegistry } from '@worldbrain/storex/ts/fields'
 
 describe('Dexie schema generation', () => {
     it('it should work', async () => {
@@ -153,7 +153,7 @@ describe('Dexie schema generation', () => {
                     dogs: 'id, *biographyTerms',
                 },
                 // migrations: [],
-            }
+            },
         ])
     })
 
@@ -163,48 +163,50 @@ describe('Dexie schema generation', () => {
             user: {
                 version: new Date(1),
                 fields: {
-                    displayName: { type: 'string' }
-                }
+                    displayName: { type: 'string' },
+                },
             },
             profile: {
                 version: new Date(1),
                 fields: {
-                    food: { type: 'string' }
+                    food: { type: 'string' },
                 },
                 relationships: [
-                    { alias: 'theUser', singleChildOf: 'user', fieldName: 'user_id' }
+                    {
+                        alias: 'theUser',
+                        singleChildOf: 'user',
+                        fieldName: 'user_id',
+                    },
                 ],
-                indices: [
-                    { field: { relationship: 'theUser' } }
-                ]
+                indices: [{ field: { relationship: 'theUser' } }],
             },
             email: {
                 version: new Date(1),
                 fields: {
-                    address: { type: 'string' }
+                    address: { type: 'string' },
                 },
                 relationships: [
-                    { alias: 'theUser', childOf: 'user', fieldName: 'user_id' }
+                    { alias: 'theUser', childOf: 'user', fieldName: 'user_id' },
                 ],
-                indices: [
-                    { field: { relationship: 'theUser' } }
-                ]
-            }
+                indices: [{ field: { relationship: 'theUser' } }],
+            },
         })
         await storageRegisty.finishInitialization()
 
         await storageRegisty.finishInitialization()
         const dexieSchemas = getDexieHistory(storageRegisty)
 
-        expect(dexieSchemas).toEqual([{
-            dexieSchemaVersion: 1,
-            storexSchemaVersion: new Date(1),
-            schema: {
-                user: '++id',
-                profile: '++id, user_id',
-                email: '++id, user_id'
+        expect(dexieSchemas).toEqual([
+            {
+                dexieSchemaVersion: 1,
+                storexSchemaVersion: new Date(1),
+                schema: {
+                    user: '++id',
+                    profile: '++id, user_id',
+                    email: '++id, user_id',
+                },
             },
-        }])
+        ])
     })
 
     it('should correctly index compound indices involving (single)ChildOf relationship fields', async () => {
@@ -213,47 +215,49 @@ describe('Dexie schema generation', () => {
             user: {
                 version: new Date(1),
                 fields: {
-                    displayName: { type: 'string' }
-                }
+                    displayName: { type: 'string' },
+                },
             },
             profile: {
                 version: new Date(1),
                 fields: {
-                    food: { type: 'string' }
+                    food: { type: 'string' },
                 },
                 relationships: [
-                    { alias: 'theUser', singleChildOf: 'user', fieldName: 'user_id' }
+                    {
+                        alias: 'theUser',
+                        singleChildOf: 'user',
+                        fieldName: 'user_id',
+                    },
                 ],
-                indices: [
-                    { field: [{ relationship: 'theUser' }, 'food'] }
-                ]
+                indices: [{ field: [{ relationship: 'theUser' }, 'food'] }],
             },
             email: {
                 version: new Date(1),
                 fields: {
-                    address: { type: 'string' }
+                    address: { type: 'string' },
                 },
                 relationships: [
-                    { alias: 'theUser', childOf: 'user', fieldName: 'user_id' }
+                    { alias: 'theUser', childOf: 'user', fieldName: 'user_id' },
                 ],
-                indices: [
-                    { field: [{ relationship: 'theUser' }, 'address'] }
-                ]
-            }
+                indices: [{ field: [{ relationship: 'theUser' }, 'address'] }],
+            },
         })
         await storageRegisty.finishInitialization()
 
         await storageRegisty.finishInitialization()
         const dexieSchemas = getDexieHistory(storageRegisty)
 
-        expect(dexieSchemas).toEqual([{
-            dexieSchemaVersion: 1,
-            storexSchemaVersion: new Date(1),
-            schema: {
-                user: '++id',
-                profile: '++id, [user_id+food]',
-                email: '++id, [user_id+address]'
+        expect(dexieSchemas).toEqual([
+            {
+                dexieSchemaVersion: 1,
+                storexSchemaVersion: new Date(1),
+                schema: {
+                    user: '++id',
+                    profile: '++id, [user_id+food]',
+                    email: '++id, [user_id+address]',
+                },
             },
-        }])
+        ])
     })
 })

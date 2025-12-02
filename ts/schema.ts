@@ -1,6 +1,6 @@
 import StorageRegistry, {
     RegistryCollections,
-} from '@worldbrain/storex/lib/registry'
+} from '@worldbrain/storex/ts/registry'
 import { DexieSchema } from './types'
 import {
     CollectionDefinition,
@@ -8,7 +8,7 @@ import {
     isChildOfRelationship,
     isConnectsRelationship,
     RelationshipReference,
-} from '@worldbrain/storex/lib/types'
+} from '@worldbrain/storex/ts/types'
 
 export const getTermsIndex = (fieldName: string) => `_${fieldName}_terms`
 
@@ -86,9 +86,8 @@ function convertIndexToDexieExps({
                 const fieldNames = []
                 for (const field of indexDef.field) {
                     if (isRelationshipReference(field)) {
-                        const fieldName = fieldNameFromRelationshipReference(
-                            field,
-                        )
+                        const fieldName =
+                            fieldNameFromRelationshipReference(field)
                         if (fieldName instanceof Array) {
                             throw new Error(
                                 `Cannot create a compound index involving a 'connects' relationship`,

@@ -6,7 +6,7 @@ import {
 import {
     dissectCreateObjectOperation,
     convertCreateObjectDissectionToBatch,
-} from '@worldbrain/storex/lib/utils'
+} from '@worldbrain/storex/ts/utils'
 
 export function _flattenBatch(
     originalBatch: OperationBatch,
